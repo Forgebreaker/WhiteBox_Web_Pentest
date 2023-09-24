@@ -1,0 +1,241 @@
+<script>
+  class Component {
+  constructor({ gameArea, width, height, color, x, y }) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.color = color;
+    this.height = height;
+    this.gameArea = gameArea;
+    this.gameContext = gameArea.canvas.getContext('2d');
+
+    this.score = 0;
+    this.speedX = 0;
+    this.speedY = 0;
+    this.gravity = 0;
+    this.gravitySpeed = 0;
+  }
+
+  update() {
+    this.gameContext.fillStyle = this.color;
+    this.gameContext.fillRect(this.x, this.y, this.width, this.height);
+    this.gameContext.strokeStyle = 'black';
+    this.gameContext.lineWidth  = 10;
+    this.gameContext.strokeRect(this.x, this.y, this.width, this.height);
+  }
+
+  crashWith(otherObj) {
+    const myLeft = this.x;
+    const myRight = this.x + (this.width);
+    const myTop = this.y;
+    const myBottom = this.y + (this.height);
+
+    const otherLeft = otherObj.x;
+    const otherRight = otherObj.x + (otherObj.width);
+    const otherTop = otherObj.y;
+    const otherBottom = otherObj.y + (otherObj.height);
+    return !((myBottom < otherTop) || (myTop > otherBottom) || (myRight < otherLeft) || (myLeft > otherRight));
+  }
+}
+
+class MyGamePiece extends Component {
+  constructor(obj) {
+    super(obj);
+    this.img = document.createElement('img');
+    this.img.src = '/static/img/convit.png';
+  }
+
+  update() {
+    this.gameContext.drawImage(this.img, this.x, this.y, this.width, this.height);
+  }
+
+  newPos() {
+    this.gravitySpeed += this.gravity;
+    this.x += this.speedX;
+    this.y += this.speedY + this.gravitySpeed;
+    this.checkHitTop(); this.checkHitBottom();
+  }
+
+  checkHitTop() {
+    if (this.y < 0) {
+      this.y = 0;
+      this.gravitySpeed = 0;
+    }
+  }
+
+  checkHitBottom() {
+    const btm = this.gameArea.canvas.height - this.height;
+    if (this.y > btm) {
+      this.y = btm;
+      this.gravitySpeed = 0;
+    }
+  }
+}
+
+class TextComponent extends Component {
+  constructor({ gameArea, width, height, color, x, y, font }) {
+    super({ gameArea, width, height, color, x, y });
+    this.gameContext.font = font;
+  }
+  update(text) {
+    this.gameContext.fillStyle = this.color;
+    this.gameContext.fillText(text, this.x, this.y);
+  }
+}
+
+class GameArea {
+  static CANVAS_WIDTH = 1200;
+  static CANVAS_HEIGHT = 450;
+  static MINGAP = 80;
+  static MAXGAP = 200;
+  static MINHEIGHT = 10;
+  static MAXHEIGHT = 400;
+  static SPEED = 3;
+
+  constructor() {
+    // Default: game is not running, will change based on user input
+    this.gameRunning = false;
+
+    this.canvas = document.createElement('canvas');
+    this.canvas.style.background = "url('/static/img/background_game.jpg')";
+    this.canvas.width = GameArea.CANVAS_WIDTH;
+    this.canvas.height = GameArea.CANVAS_HEIGHT;
+    this.context = this.canvas.getContext("2d");
+
+    this.frameNo = 0;
+    this.myPiece = new MyGamePiece({
+      color: "red",
+      x: 10, y: 120,
+      gameArea: this,
+      width: 55, height: 40,
+    });
+    this.myPiece.gravity = 0.05;
+
+    this.myScore = new TextComponent({
+      x: 880, y: 40,
+      width: 30, height: 30,
+      color: "black", font: "30px Consolas",
+      gameArea: this,
+    });
+    this.myObstacles = [];
+  }
+
+  start() {
+    // return this.loseGame();
+    if (this.gameRunning) return;
+    this.gameRunning = true;
+
+    document.getElementById('bird-running').style.display = 'none';
+    document.getElementById('intro-music').pause();
+    this.backgroundMusic = document.createElement('audio');
+    this.backgroundMusic.src = "/static/audio/maplestory_playing.mp3";
+    this.backgroundMusic.play();
+
+    document.getElementById('play-btn').style.display = 'none';
+
+    const gameRenderer = document.getElementById('game-renderer');
+    gameRenderer.appendChild(this.canvas);
+
+    this.gameRunningInterval = setInterval(() => this.updateGameArea(), 10);
+  }
+
+  checkCrash() {
+    for (let i = 0; i < this.myObstacles.length; i += 1) {
+      if (this.myPiece.crashWith(this.myObstacles[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  updateGameArea() {
+    const hasCrashed = this.checkCrash();
+    if (hasCrashed) return this.loseGame();
+
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    if (this.frameNo === 0 || this.frameNo % 230 === 0) {
+      const x = this.canvas.width;
+      const gap = Math.floor(Math.random()*(GameArea.MAXGAP-GameArea.MINGAP+1)+GameArea.MINGAP);
+      const height = Math.floor(Math.random()*(GameArea.MAXHEIGHT-GameArea.MINHEIGHT+1)+GameArea.MINHEIGHT);
+      this.myObstacles.push(new Component({
+        width: 60, height,
+        color: "#2CB01A",
+        x, y: 0,
+        gameArea: this,
+      }));
+
+      this.myObstacles.push(new Component({
+        width: 60,
+        height: x - height - gap,
+        color: "#2CB01A",
+        x, y: height + gap,
+        gameArea: this,
+      }));
+    }
+    this.myObstacles.forEach(obstacle => {
+      obstacle.x -= GameArea.SPEED;
+      obstacle.update();
+    });
+
+    this.myScore.update("SCORE: " + myGameArea.frameNo);
+    this.myPiece.newPos();
+    this.myPiece.update();
+
+    this.frameNo += 1;
+  }
+
+  loseGame() {
+    // Set UX/UI
+    this.backgroundMusic.pause();
+    clearInterval(this.gameRunningInterval);
+    this.canvas.style.display = 'none';
+    document.getElementById('text-tutorial').style.display = 'none';
+    const score = myGameArea.frameNo;
+    document.getElementById('text-score').innerText += score;
+    document.getElementById('text-losegame').style.display = 'block';
+
+    // Update score on backend
+    submitPoint(score);
+  }
+};
+
+const myGameArea = new GameArea();
+
+// function accelerate(n) {
+//   myGameArea.myPiece.gravity = n;
+// }
+
+document.body.onkeyup = function(e) {
+  if(e.keyCode == 32){
+    e.preventDefault();
+    myGameArea.myPiece.gravity = 0.05;
+  }
+}
+
+document.body.onkeydown = function(e) {
+  if(e.keyCode == 32) {
+    e.preventDefault();
+    myGameArea.myPiece.gravity = -0.2;
+  }
+}
+</script>
+
+<div class="container text-center">
+  <div id="game-renderer"></div>
+  <button id="play-btn" onclick="myGameArea.start()">START GAME</button>
+  <br><br>
+  <h5 class="display-5 text-center" id="text-tutorial">HOW TO PLAY: hold *SPACE* to float</h5>
+
+  <div id="text-losegame" style='display: none'>
+    <h5 class="display-3 text-center" id="text-score">You scored: </h5>
+    <button onclick="location.href='/'">Check hall of fame</button><br>
+    <button onclick="location.href='/game.php?game=fatty-bird-2.html'">Go to game 2</button><br>
+  </div>
+
+</div>
+
+<audio id="intro-music" src="/static/audio/maplestory_intro.mp3" autoplay></audio>
+<br><br><br>
+<br><br><br>
+<br><br><br>
+<marquee id="bird-running" direction="right" style="width: 100%;"><img style="height: 50px" src="/static/img/convit.png"></marquee>

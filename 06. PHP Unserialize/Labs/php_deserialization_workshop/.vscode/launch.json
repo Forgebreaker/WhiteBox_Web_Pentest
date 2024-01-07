@@ -1,0 +1,44 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Xdebug level 1",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "pathMappings": {
+                "/var/www/html": "${workspaceFolder}/php_deserialization_workshop_level1/src"
+            }
+        }, 
+        {
+            "name": "Xdebug level 2",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "pathMappings": {
+                "/var/www/html": "${workspaceFolder}/php_deserialization_workshop_level2/src"
+            }
+        },
+        {
+            "name": "Xdebug level 3",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "pathMappings": {
+                "/var/www/html": "${workspaceFolder}/php_deserialization_workshop_level3/src"
+            }
+        },
+        {
+            "name": "Xdebug level 4",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "pathMappings": {
+                "/var/www/html": "${workspaceFolder}/php_deserialization_workshop_level4/src"
+            }
+        }
+    ]
+}

@@ -1,0 +1,57 @@
+version: "3.6"
+services:
+  upload-file-level-1:
+    build: ./level1
+    restart: unless-stopped
+    ports:
+      - "12001:80"
+    volumes:
+      - ./level1/src:/var/www/html
+      - /var/www/html/upload
+
+  upload-file-level-2:
+    build: ./level2
+    restart: unless-stopped
+    ports:
+      - "12002:80"
+    volumes:
+      - ./level2/src:/var/www/html
+      - /var/www/html/upload
+
+  upload-file-level-3:
+    build: ./level3
+    restart: unless-stopped
+    ports:
+      - "12003:80"
+    volumes:
+      - ./level3/src:/var/www/html
+      - /var/www/html/upload
+
+  upload-file-level-4:
+    build: ./level4
+    restart: unless-stopped
+    ports:
+      - "12004:80"
+    volumes:
+      - ./level4/src:/var/www/html
+      - /var/www/html/upload
+
+  upload-file-level-5:
+    build: ./level5
+    restart: unless-stopped
+    ports:
+      - "12005:80"
+    volumes:
+      - ./level5/src:/var/www/html
+      - /var/www/html/upload
+
+  upload-file-level-6:
+    build: ./level6
+    restart: unless-stopped
+    ports:
+      - "12006:80"
+    volumes:
+      - ./level6/src:/var/www/html
+      - /var/www/html/upload
+
+

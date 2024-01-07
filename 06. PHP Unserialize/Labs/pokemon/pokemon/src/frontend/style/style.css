@@ -1,0 +1,198 @@
+body {
+    background-color: ivory !important;
+    font-family: sans-serif;
+}
+
+#container {
+    text-align: center !important;
+    /* border: 1px solid #000; */
+    width: 1400px;
+    height: 850px;
+    padding: 30px;
+    margin-top: 30px;
+}
+
+.slide-container {
+    display: flex;
+    width: 1600px;
+}
+
+
+canvas {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    z-index: 2;
+}
+
+iframe {
+    width: 825px;
+    height: 500px;
+}
+
+h1 {
+    font-size: 2.8rem;
+    line-height: 3.4rem;
+}
+
+h2 {
+    font-size: 2rem;
+}
+
+h1,
+h2 {
+    font-family: 'Press Start 2P', cursive;
+}
+
+p {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+}
+
+hr {
+    margin: 40px auto;
+    max-width: 100px;
+    display: block;
+    height: 1px;
+    border: 0;
+    border-top: 1px solid #ccc;
+    padding: 0;
+}
+
+.pen-intro {
+    text-align: center;
+}
+
+.menu {
+    text-align: center;
+}
+
+.nes-container.with-title>.title {
+    background-color: ivory !important;
+}
+
+.user-panel {
+    display: flex;
+    width: 600px;
+    margin-top: 280px;
+    margin-left: 300px;
+}
+
+.user-action {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-enemy,
+.info-user {
+    width: 500px;
+    text-align: left;
+}
+
+.info-enemy>p,
+.info-user>p {
+    text-align: left;
+}
+
+.info-enemy {
+    margin-top: 60px;
+    margin-left: 400px;
+}
+
+.info-user {
+    margin-right: 20px;
+}
+
+.info-detail-pokemon tr td {
+    text-align: left;
+    border: none;
+    position: unset;
+}
+
+button {
+    margin-bottom: 10px !important;
+    z-index: 3;
+}
+
+.pokemon-selecter {
+    display: flex;
+    justify-content: center;
+}
+
+.pokemon-selecter>div {
+    margin: 10px;
+}
+
+.pokemon-selecter>div.selected {
+    border-color: red;
+}
+
+.pokemon-selecter>div:hover {
+    border-color: red;
+}
+
+.grid-button-menu {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 3;
+}
+
+#dialog-character {
+    width: 80%;
+}
+
+.chat-ballon {
+    font-size: 24px;
+    word-wrap: break-word;
+    width: 240px;
+}
+
+
+.grid-general {
+    grid-area: general;
+}
+
+.grid-image {
+    grid-area: image;
+}
+
+.grid-detail {
+    grid-area: detail;
+}
+
+.grid-character-info {
+    display: grid;
+    grid-template-areas:
+        'general general'
+        'image detail'
+        'image detail'
+        'image detail';
+    gap: 10px;
+    padding: 10px;
+}
+
+.grid-container>div {
+    background-color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+    padding: 20px 0;
+    font-size: 30px;
+}
+
+.message-list {
+    height: 400px;
+    overflow: scroll;
+    overflow-x: hidden;
+}
+
+.message-list::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.message-list {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}

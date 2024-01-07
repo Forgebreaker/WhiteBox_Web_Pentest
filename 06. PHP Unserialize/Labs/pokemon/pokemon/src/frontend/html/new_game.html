@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <link rel="stylesheet" href="../style/style.css">
+    <title>Character Walking</title>
+</head>
+
+<body>
+    <div id="container">
+        <header class="pen-intro">
+            <h1>Welcome to <br> Pokemon Game </h1> <br> <h2>Please choose your Pokemon</h2>
+        </header>
+        <hr />
+        <form method="post" action="/backend/helper/start.php">
+            <div class="menu">
+                <div class="nes-field" style="width: 500px; margin: 0 auto;">
+                    <label for="name_field">Your pokemon name</label>
+                    <input type="text" id="name_field" name="pokemon_name" class="nes-input" style="text-align: center;">
+                </div>
+                <hr />
+                <label>Your pokemon</label>
+                <input type="text" id="type_field" name="pokemon_type" hidden>
+                <div class="pokemon-selecter">
+                    <div class="nes-container with-title is-centered" onclick="choose(this)">
+                        <p class="title">Charmander</p>
+                        <i class="nes-charmander"></i>
+                    </div>
+                    <div class="nes-container with-title is-centered" onclick="choose(this)">
+                        <p class="title">Bulbasaur</p>
+                        <i class="nes-bulbasaur"></i>
+                    </div>
+                    <div class="nes-container with-title is-centered" onclick="choose(this)">
+                        <p class="title">Squirtle</p>
+                        <i class="nes-squirtle"></i>
+                    </div>
+                </div>
+                <hr />
+                <button type="submit" class="nes-btn is-primary" id="start-game">Start</button>
+            </div>
+        </form>
+    </div>
+    <script src="../js/utils.js"></script>
+    <script src="../js/main.js"></script>
+    <script src="../js/new_game.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../../static/css/styles.css">
+</head>
+
+<body>        
+  <br/>
+  <br/>
+  <h1 >SQL Injection workshop</h3>
+  <h2 style="text-align: center;">Update Email</h2>
+  <form class="form-login" method="post">
+    <div class="container">
+      <label for="uname"><b>Enter your new Email:</b></label>
+      <input type="text" placeholder="Enter Email" name="email" required>
+
+      <span>
+        <?php if (isset($message)) echo $message;?>
+      </span>
+      <button type="submit" name="button">Submit</button>
+    </div>
+  </form>
+</body>
+
+</html>

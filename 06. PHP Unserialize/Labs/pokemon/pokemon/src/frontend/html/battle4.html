@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <link rel="stylesheet" href="../style/style.css">
+  <title>Character Walking</title>
+</head>
+
+<body>
+  <div id="container">
+
+    <header class="pen-intro">
+      <h1>Battle</h1>
+    </header>
+    <div class="nes-container with-title is-centered info-enemy">
+      <p class="title">Wild Pokemon</p>
+      <p> <i class="nes-icon star"></i>Strength: <span id="wild-str"></span> </p>
+      <p> <i class="nes-icon heart"></i>HP: <span id="wild-hp"></span> </p>
+    </div>
+    <div class="user-panel">
+      <div class="nes-container with-title is-centered info-user">
+        <p class="title">User Pokemon</p>
+        <p> <i class="nes-icon star"></i>Strength: <span id="user-str"></span> </p>
+        <p> <i class="nes-icon heart"></i>HP: <span id="user-hp"></span> </p>
+      </div>
+      <div class="user-action">
+        <button id="action-fight" class="nes-btn is-error">
+          Fight
+        </button>
+        <button id="action-run" class="nes-btn is-warning">
+          Run
+        </button>
+      </div>
+    </div>
+    <section>
+      <dialog class="nes-dialog" id="dialog-default">
+        <form method="dialog">
+          <p id="battle-result"></p>
+          <menu class="dialog-menu">
+            <button class="nes-btn is-primary" id="return-btn" onclick="if (this.getAttribute('link')) location=this.getAttribute('link')">Return</button>
+          </menu>
+        </form>
+      </dialog>
+    </section>
+    <canvas id="canvas"></canvas>
+    
+  </div>
+</body>
+<script src="../js/utils.js"></script>
+<script src="../js/main.js"></script>
+<script src="../js/battle4.js"></script>
+
+</html>

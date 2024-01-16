@@ -1,0 +1,96 @@
+version: "3"
+
+services:
+  level01:
+    build: ./cmdi_level1
+    container_name: 'cmdi_level01'
+    restart: 'unless-stopped'
+    ports:
+      - "3001:80"
+    volumes: 
+      - ./cmdi_level1/src/:/var/www/html/
+  level02:
+    build: ./cmdi_level2
+    container_name: 'cmdi_level02'
+    restart: 'unless-stopped'
+    ports:
+      - "3002:80"
+    volumes: 
+      - ./cmdi_level2/src/:/var/www/html/
+  level03:
+    build: ./cmdi_level3
+    container_name: 'cmdi_level03'
+    restart: 'unless-stopped'
+    ports:
+      - "3003:80"
+    volumes:
+      - ./cmdi_level3/src/:/var/www/html/
+  level04:
+    build: ./cmdi_level4
+    container_name: 'cmdi_level04'
+    restart: 'unless-stopped'
+    ports:
+      - "3004:80"
+    volumes: 
+      - ./cmdi_level4/src/:/var/www/html/
+  level05-proxy:
+    image: nginx:stable
+    ports:
+      - "3005:80"
+    volumes:
+      - ./cmdi_level5/config/nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+    networks:
+      - internet
+      - no-internet
+  level05:
+    build: ./cmdi_level5
+    container_name: 'cmdi_level05'
+    restart: 'unless-stopped'
+    volumes: 
+      - ./cmdi_level5/src/:/var/www/html/ 
+    networks:
+      - no-internet
+  level06-proxy:
+    image: nginx:stable
+    ports:
+      - "3006:80"
+    volumes:
+      - ./cmdi_level6/config/nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+    networks:
+      - internet
+      - no-internet
+  level06:
+    build: ./cmdi_level6
+    container_name: 'cmdi_level06'
+    restart: 'unless-stopped'
+    volumes: 
+      # using :ro to prevent write file, dont remove this :(
+      - ./cmdi_level6/src/:/var/www/html/:ro
+    networks:
+      - no-internet
+  level07-proxy:
+    image: nginx:stable
+    ports:
+      - "3007:80"
+    volumes:
+      - ./cmdi_level7/config/nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+    networks:
+      - internet
+      - no-internet
+  level07:
+    build: ./cmdi_level7
+    container_name: 'cmdi_level07'
+    restart: 'unless-stopped'
+    volumes: 
+      # using :ro to prevent write file, dont remove this :(
+      - ./cmdi_level7/src/:/var/www/html/:ro
+    networks:
+      - no-internet
+
+networks:
+  internet: {}
+  no-internet:
+    internal: true

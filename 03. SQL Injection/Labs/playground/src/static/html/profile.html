@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../../static/css/styles.css">
+</head>
+
+<body>        
+  <br/>
+  <br/>
+  <h1 >SQL Injection workshop</h3>
+  <h2 style="text-align: center;">Get all information from user table</h2>
+  <form class="form-login" method="post">
+    <div class="container">
+      <button type="submit" name="button">Click here to show your Email</button>
+      <div style="text-align: center;">
+        <?php if (isset($message)) echo "<b>Your Email:</b> ".$message;?>
+      </div>
+    </div>
+  </form>
+</body>
+
+</html>

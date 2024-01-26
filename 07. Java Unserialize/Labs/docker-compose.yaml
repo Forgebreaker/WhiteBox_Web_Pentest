@@ -1,0 +1,15 @@
+version: "3.0"
+services:
+  deserialize:
+    image: cyberjutsu/java-deserialization-lab-local:1.3
+    container_name: java_deserialize
+    volumes:
+      - "./src/java_deserialization:/home/cbjs/java_deserialization"
+      - "./src/debug-java-web:/home/cbjs/debug-java-web"
+      - "./logs:/home/cbjs/apache-tomcat-8.5.35/logs"
+    restart: always
+    ports:
+      - "13337:8080"
+      - "5005:5005"
+
+

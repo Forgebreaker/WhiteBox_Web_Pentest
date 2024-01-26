@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Quick Note 6</title>
+  <style>
+    body {
+      padding: 50px;
+      font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+    }
+
+    input {
+      margin-top: 5px;
+      margin-bottom: 5px;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 20px
+    }
+
+    label {
+      display: inline-block;
+      padding-top: 5px;
+      text-align: left;
+      width: 100px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Quick Note 6</h1>
+  <br>
+  <p>Welcome <%= email %>! 👋</p>
+  <form action="/ticket" method="post">
+    <label>Need help? </label>
+    <input type="text" name="content">
+    <input type="submit" value="📝">
+  </form>
+  <br>
+  <a href="/logout">Logout</a>
+</body>
+
+</html>

@@ -1,0 +1,67 @@
+version: "3.6"
+services:
+  xss-workshop-level-1:
+    container_name:  xss-workshop-level-1
+    build: ./level1
+    restart: unless-stopped
+    volumes:
+      - ./level1/src:/app
+    ports:
+      - "13001:3000"
+
+  xss-workshop-level-2:
+    container_name:  xss-workshop-level-2
+    build: ./level2
+    restart: unless-stopped
+    volumes:
+      - ./level2/src:/app
+    ports:
+      - "13002:3000"
+
+  xss-workshop-level-3:
+    container_name:  xss-workshop-level-3
+    build: ./level3
+    restart: unless-stopped
+    volumes:
+      - ./level3/src:/app
+    ports:
+      - "13003:3000"
+
+  xss-workshop-level-4:
+    container_name: xss-workshop-level-4
+    build: ./level4
+    restart: unless-stopped
+    volumes:
+      - ./level4/src:/app
+    ports:
+      - "13004:3000"
+
+  xss-workshop-level-5:
+    container_name: xss-workshop-level-5
+    build: ./level5
+    restart: unless-stopped
+    volumes:
+      - ./level5/src:/app
+    ports:
+      - "13005:3000"
+
+  xss-workshop-level-6:
+    container_name:  xss-workshop-level-6
+    build: ./level6
+    restart: unless-stopped
+    volumes:
+      - ./level6/src:/app
+    ports:
+      - "13006:3000"
+    depends_on:
+      - xss-workshop-level-6-db
+    environment:
+      - DB_URL=mongodb://xss-workshop-level-6-db:27017/level6
+
+  xss-workshop-level-6-db:
+    container_name: xss-workshop-level-6-db
+    image: mongo
+    restart: unless-stopped
+
+volumes:
+  notused:

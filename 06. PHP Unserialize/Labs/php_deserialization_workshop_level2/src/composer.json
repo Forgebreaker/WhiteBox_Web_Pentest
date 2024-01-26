@@ -1,0 +1,7 @@
+{
+    "require": {
+        "guzzlehttp/guzzle": "6.0.0",
+        "guzzlehttp/psr7": "1.0",
+        "guzzlehttp/promises": "1.0"
+    }
+}

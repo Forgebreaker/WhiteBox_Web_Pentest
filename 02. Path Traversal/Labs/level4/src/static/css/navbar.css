@@ -1,0 +1,18 @@
+ul {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  list-style-type: none;
+  margin: 0px;
+  margin-left: -10px;
+  background-color: DarkSlateGray;
+  padding: 10px;
+  overflow: hidden;
+}
+li {
+  display: inline;
+}
+li a {
+  margin-left: 20px;
+  color: white;
+}

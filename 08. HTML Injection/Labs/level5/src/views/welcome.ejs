@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Quick Note 5</title>
+    <style>
+        body {
+            padding: 50px;
+            font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+        }
+
+        input {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 20px
+        }
+
+        label {
+            display: inline-block;
+            padding-top: 5px;
+            text-align: left;
+            width: 100px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Quick Note 5</h1>
+    <br>
+    <p>Input your email to continue ... </p>
+    <form action="/user" method="post" onsubmit="setInfo(event)">
+        <label>Email: </label>
+        <input type="text" name="email">
+        <input type="submit" value="📝">
+    </form>
+
+    <p>Goal: steal document.cookie</p>
+
+    <script>
+        function setInfo(event) {
+            event.preventDefault();
+            data = { "email": event.target.elements.email.value };
+            fetch("/user", {
+                method: "post",
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data),
+            }).then(() => {
+                localStorage.setItem("info", "true");
+                redirect();
+            });
+        }
+
+        function redirect() {
+            var url = new URL(window.location);
+            var return_url = url.searchParams.get("return_url");
+            window.location = return_url;
+        }
+
+        var info = localStorage.getItem("info");
+        if (info === "true") {
+            redirect()
+        }
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,40 @@
+version: '3.6'
+services:
+  database:
+    container_name: ssrf-level1-database
+    command: --default-authentication-plugin=mysql_native_password
+    restart: unless-stopped
+    build: ./database
+    volumes:
+      - ./database/db.sql:/docker-entrypoint-initdb.d/db.sql
+    environment:
+      - MYSQL_ROOT_PASSWORD=45299417d86f231f6a584d1488edb763
+      - MYSQL_DATABASE=myDB
+      - MYSQL_USER=blabla
+      - MYSQL_PASSWORD=22ebd5b17182c046e6c4bc5df1719b56
+    # Uncomment to debug
+    # expose:
+    #   - 3306
+  web:
+    container_name: ssrf-level1-web
+    depends_on:
+      - database
+    build: ./web
+    ports:
+      - '9001:9001'
+    environment:
+      - MYSQL_HOSTNAME=database
+      - MYSQL_ROOT_PASSWORD=45299417d86f231f6a584d1488edb763
+      - MYSQL_DATABASE=myDB
+      - MYSQL_USER=blabla
+      - MYSQL_PASSWORD=22ebd5b17182c046e6c4bc5df1719b56
+    volumes:
+      - ./web/src:/var/cbjs/html
+      - ./web/web-internal:/var/cbjs/internal/html
+
+  ftp:
+    build: ./ftp
+    container_name: ssrf-level1-ftp
+    # Uncomment to debug
+    # expose:
+    #   - 21

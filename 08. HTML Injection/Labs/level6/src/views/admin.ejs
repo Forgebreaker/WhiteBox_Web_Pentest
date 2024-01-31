@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Quick Note 6</title>
+    <style>
+        body {
+            padding: 50px;
+            font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+        }
+
+        input {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 20px
+        }
+
+        label {
+            display: inline-block;
+            padding-top: 5px;
+            text-align: left;
+            width: 70px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Quick Note 6 - Admin panel</h1>
+    <br>
+    <table>
+        <tr>
+            <td><b>Email</b></td>
+            <td><b>Content</b></td>
+        </tr>
+        <% for(var i in tickets) { %>
+            <tr>
+                <td>
+                    <%- tickets[i].email %>
+                </td>
+                <td>
+                    <%= tickets[i].content %>
+                </td>
+            </tr>
+            <% } %>
+    </table>
+    <br>
+    <a href="/logout">Logout</a>
+</body>
+
+</html>

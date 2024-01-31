@@ -1,0 +1,10 @@
+version: "3.6"
+services:
+  symlink:
+    build: ./symlink
+    volumes:
+      - ./symlink/src/:/var/www/html/
+      - /var/www/html/upload
+    ports:
+      - 9091:80
+

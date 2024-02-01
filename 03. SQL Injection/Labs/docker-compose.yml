@@ -1,0 +1,27 @@
+version: "3.6"
+services:
+    db:
+        build: ./db
+        command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8 --collation-server=utf8_unicode_ci
+        restart: unless-stopped
+        expose:
+            - 3306
+        environment:
+            # These password and stuff is not neccesarry too secret
+            - MYSQL_ROOT_PASSWORD=45299417d86f231f6a584d1488edb763
+            - MYSQL_USER=db_user
+            - MYSQL_PASSWORD=db_password
+
+    playground:
+        build: ./playground
+        restart: unless-stopped
+        ports:
+            - 24001:80
+        volumes:
+            - ./playground/src:/var/www/html
+        environment:
+            # These password and stuff is not neccesarry too secret
+            - MYSQL_HOSTNAME=db
+            - MYSQL_ROOT_PASSWORD=45299417d86f231f6a584d1488edb763
+            - MYSQL_USER=db_user
+            - MYSQL_PASSWORD=db_password

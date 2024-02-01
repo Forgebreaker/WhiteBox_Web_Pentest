@@ -1,0 +1,19 @@
+create database if not exists blog;
+use blog;
+create table config
+(
+    id    int NOT NULL AUTO_INCREMENT,
+    name  varchar(200),
+    value varchar(200),
+    primary key (id)
+);
+insert into config(name, value)
+values ('lang_path', './lang/');
+create table comments
+(
+    id           int NOT NULL AUTO_INCREMENT,
+    display_name varchar(200),
+    comment      varchar(200),
+    image        varchar(200),
+    primary key (id)
+);

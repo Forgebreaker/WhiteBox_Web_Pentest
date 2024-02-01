@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Quick Note 5</title>
+    <style>
+        body {
+            padding: 50px;
+            font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+        }
+
+        input {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 20px
+        }
+
+        label {
+            display: inline-block;
+            padding-top: 5px;
+            text-align: left;
+            width: 100px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Quick Note 5</h1>
+    <br>
+    <p>Welcome <%= email %>! 👋</p>
+    <form action="/note" method="post">
+        <label>Note here:</label>
+        <input type="text" name="note">
+        <input type="submit" value="➕">
+    </form>
+    <br>
+    <a href="/note">List note</a>
+    <br>
+    <br>
+    <a href="/logout" onclick="clearInfo()">Logout</a>
+    
+    <script>
+        function clearInfo() {
+            localStorage.removeItem("info");
+        }
+    </script>
+
+</body>
+
+</html>

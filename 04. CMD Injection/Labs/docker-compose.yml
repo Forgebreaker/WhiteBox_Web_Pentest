@@ -1,0 +1,96 @@
+version: "3"
+
+services:
+  level01:
+    build: ./level1
+    container_name: 'level01'
+    restart: 'unless-stopped'
+    ports:
+      - "3001:80"
+    volumes: 
+      - ./level1/src/:/var/www/html/
+  level02:
+    build: ./level2
+    container_name: 'level02'
+    restart: 'unless-stopped'
+    ports:
+      - "3002:80"
+    volumes: 
+      - ./level2/src/:/var/www/html/
+  level03:
+    build: ./level3
+    container_name: 'level03'
+    restart: 'unless-stopped'
+    ports:
+      - "3003:80"
+    volumes:
+      - ./level3/src/:/var/www/html/
+  level04:
+    build: ./level4
+    container_name: 'level04'
+    restart: 'unless-stopped'
+    ports:
+      - "3004:80"
+    volumes: 
+      - ./level4/src/:/var/www/html/
+  level05-proxy:
+    image: nginx:stable
+    ports:
+      - "3005:80"
+    volumes:
+      - ./level5/config/nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+    networks:
+      - internet
+      - no-internet
+  level05:
+    build: ./level5
+    container_name: 'level05'
+    restart: 'unless-stopped'
+    volumes: 
+      - ./level5/src/:/var/www/html/ 
+    networks:
+      - no-internet
+  level06-proxy:
+    image: nginx:stable
+    ports:
+      - "3006:80"
+    volumes:
+      - ./level6/config/nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+    networks:
+      - internet
+      - no-internet
+  level06:
+    build: ./level6
+    container_name: 'level06'
+    restart: 'unless-stopped'
+    volumes: 
+      # using :ro to prevent write file, dont remove this :(
+      - ./level6/src/:/var/www/html/:ro
+    networks:
+      - no-internet
+  level07-proxy:
+    image: nginx:stable
+    ports:
+      - "3007:80"
+    volumes:
+      - ./level7/config/nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+    networks:
+      - internet
+      - no-internet
+  level07:
+    build: ./level7
+    container_name: 'level07'
+    restart: 'unless-stopped'
+    volumes: 
+      # using :ro to prevent write file, dont remove this :(
+      - ./level7/src/:/var/www/html/:ro
+    networks:
+      - no-internet
+
+networks:
+  internet: {}
+  no-internet:
+    internal: true

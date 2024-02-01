@@ -1,0 +1,29 @@
+version: "3.6"
+services:
+  php_deser_1:
+    build: ./level1
+    restart: unless-stopped
+    ports:
+      - "25001:80"
+    volumes:
+      - ./level1/src:/var/www/html/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  php_deser_2:
+    build: ./level2
+    restart: unless-stopped
+    ports:
+      - "25002:80"
+    volumes:
+      - ./level2/src:/var/www/html/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  php_deser_3:
+    build: ./level3
+    restart: unless-stopped
+    ports:
+      - "25003:80"
+    volumes:
+      - ./level3/src:/var/www/html/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

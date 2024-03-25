@@ -1,0 +1,61 @@
+version: "3.6"
+services:
+  path-traversal-1:
+    build: ./level1
+    volumes:
+      - "./level1/src/:/var/www/html/"
+    ports:
+      - 8091:80
+  path-traversal-2:
+    build: ./level2
+    volumes:
+      - "./level2/src/:/var/www/html/"
+    ports:
+      - 8092:80
+  path-traversal-3:
+    build: ./level3
+    volumes:
+      - "./level3/src/:/var/www/html/"
+      - "/var/www/html/upload"
+    ports:
+      - 8093:80
+  path-traversal-4:
+    build: ./level4
+    restart: unless-stopped
+    ports:
+      - 8094:80
+    volumes:
+      - "./level4/src/:/var/www/html/"
+      - "/var/www/html/upload"
+    environment:
+      # These password and stuff is not neccesarry too secret
+      - MYSQL_HOSTNAME=path-traversal-4-db
+      - MYSQL_ROOT_PASSWORD=45299417d86f231f6a584d1488edb763
+      - MYSQL_DATABASE=myDB
+      - MYSQL_USER=path-traversal
+      - MYSQL_PASSWORD=22ebd5b17182c046e6c4bc5df1719b56
+  path-traversal-4-db:
+    build: ./level4-db
+    #platform: x86_64
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    expose:
+      - 3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=45299417d86f231f6a584d1488edb763
+      - MYSQL_DATABASE=myDB
+      - MYSQL_USER=path-traversal
+      - MYSQL_PASSWORD=22ebd5b17182c046e6c4bc5df1719b56
+  path-traversal-5:
+    build: ./level5
+    volumes:
+      - "./level5/src/:/var/www/html/"
+    ports:
+      - 8095:80
+  path-traversal-6:
+    build: ./level6
+    volumes:
+      - "./level6/src/:/var/www/html/"
+      - "/var/www/html/upload"
+    ports:
+      - 8096:80

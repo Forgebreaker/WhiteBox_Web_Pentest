@@ -1,0 +1,74 @@
+version: "3.6"
+services:
+    db:
+        container_name: fakebook-database
+        build: ./database
+        command: --default-authentication-plugin=mysql_native_password
+        restart: unless-stopped
+        environment:
+            - MYSQL_ROOT_PASSWORD=1
+    web_1:
+        container_name: fakebook-web-1
+        build: ./level1
+        restart: unless-stopped
+        ports:
+            - 24001:80
+        volumes:
+            - ./level1/web:/var/www/html
+        environment:
+            - MYSQL_HOSTNAME=db
+            - MYSQL_DATABASE=database_1
+            - MYSQL_USER=db1_user
+            - MYSQL_PASSWORD=db1_password
+    web_2:
+        container_name: fakebook-web-2
+        build: ./level2
+        restart: unless-stopped
+        ports:
+            - 24002:80
+        volumes:
+            - ./level2/web:/var/www/html
+        environment:
+            - MYSQL_HOSTNAME=db
+            - MYSQL_DATABASE=database_2
+            - MYSQL_USER=db2_user
+            - MYSQL_PASSWORD=db2_password
+    web_3:
+        container_name: fakebook-web-3
+        build: ./level3
+        restart: unless-stopped
+        ports:
+            - 24003:80
+        volumes:
+            - ./level3/web:/var/www/html
+        environment:
+            - MYSQL_HOSTNAME=db
+            - MYSQL_DATABASE=database_3
+            - MYSQL_USER=db3_user
+            - MYSQL_PASSWORD=db3_password
+    web_4:
+        container_name: fakebook-web-4
+        build: ./level4
+        restart: unless-stopped
+        ports:
+            - 24004:80
+        volumes:
+            - ./level4/web:/var/www/html
+        environment:
+            - MYSQL_HOSTNAME=db
+            - MYSQL_DATABASE=database_4
+            - MYSQL_USER=db4_user
+            - MYSQL_PASSWORD=db4_password   
+    web_5:
+        container_name: fakebook-web-5
+        build: ./level5
+        restart: unless-stopped
+        ports:
+            - 24005:80
+        volumes:
+            - ./level5/web:/var/www/html
+        environment:
+            - MYSQL_HOSTNAME=db
+            - MYSQL_DATABASE=database_5
+            - MYSQL_USER=db5_user
+            - MYSQL_PASSWORD=db5_password   

